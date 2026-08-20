@@ -1,7 +1,7 @@
 # Mac Screenshot App — Build Spec
 
 **Product:** Menu-bar screenshot tool for macOS, built with Electron
-**Model:** Paid, one-time license
+**Model:** Free (v1.0). No license, no trial, no account, no payment processor.
 **Date:** August 2026
 **Status:** Pre-development spec
 
@@ -22,38 +22,32 @@
 
 ### 1.2 What every serious competitor ships (table stakes)
 
-If your app lacks these, reviewers will call it unfinished:
-
-- Region, window, and full-screen capture with a shortcut
+- Region and full-screen capture with a shortcut
 - Multi-monitor support with correct Retina resolution
 - Clipboard + auto-save simultaneously
-- An annotation editor (arrow, box, text, blur/pixelate, highlight)
-- Screenshot history with re-open
-- Configurable save location and filename template
 - Menu bar presence + launch at login
-- **Scrolling capture** — CleanShot, Shottr, and Snagit all have it; it is no longer a differentiator, it is expected
+
+A few things every serious competitor *also* ships — an annotation editor, scrolling capture, screenshot history — are **deliberately cut from this project's v1.0** (§2.4). That's a scope decision, not an oversight: don't add them back in unprompted because a competitor has them.
 
 ### 1.3 Where competitors are genuinely weak — your openings
 
-1. **Nobody has a clean "buy once, own forever, zero cloud" story.** CleanShot's $29 buys one year of updates then nudges you to $19/yr. Shottr is free but its business model is unclear (solo dev, PWYW), which enterprise buyers dislike. Snagit is $63. There's a real gap at **$19–29, one-time, updates included for the major version, no account required**.
+1. **Nobody has a clean "completely free, zero cloud, zero account" story.** CleanShot is $29+$19/yr. Shottr is free but pay-what-you-want with an unclear business model, which enterprise buyers dislike. Snagit is $63. Being outright free with no account, no watermark, and no nag removes the one friction even Shottr still has.
 
-2. **Privacy is unclaimed territory.** Every cloud-first competitor requires an account for its best features. A screenshot tool sees passwords, API keys, customer PII, and internal dashboards. "This app makes zero network requests except a license check and an update check — here's the proof" is a claim CleanShot structurally cannot make. Developers, finance, healthcare, legal, and security-conscious enterprises buy on this.
+2. **Privacy is unclaimed territory.** Every cloud-first competitor requires an account for its best features. A screenshot tool sees passwords, API keys, customer PII, and internal dashboards. "This app makes zero network requests except an update check — here's the proof" is a claim CleanShot structurally cannot make. Developers, finance, healthcare, legal, and security-conscious enterprises buy on this.
 
-3. **Multi-monitor is under-served.** Mixed-DPI setups (Retina laptop + 4K external + 1080p vertical) produce wrong-resolution or wrong-monitor captures in most tools. Doing this *correctly* is unglamorous, hard, and noticed by exactly the professionals who pay.
-
-4. **Redaction is treated as an afterthought.** Xnapper's auto-redaction of emails and API keys is its best feature and nobody else copies it well. A blur tool that *finds* sensitive strings for you is a demo-able differentiator.
+3. **Multi-monitor is under-served.** Mixed-DPI setups (Retina laptop + 4K external + 1080p vertical) produce wrong-resolution or wrong-monitor captures in most tools. Doing this *correctly* is unglamorous, hard, and noticed by exactly the professionals who care.
 
 ### 1.4 Where you cannot win — be honest about this
 
-Your stated constraint is Electron. That costs you the two axes Shottr wins on:
+The stated constraint is Electron. That costs you the two axes Shottr wins on:
 
 - **Bundle size:** Electron ships ~100–150 MB against Shottr's 2.3 MB. You will lose every "lightweight" comparison.
 - **Idle memory:** ~120–200 MB against a native app's ~30–50 MB. Menu bar apps run 24/7 and users watch Activity Monitor.
 - **Cold capture latency:** if a BrowserWindow has to be created when the hotkey fires, you're at 200–400 ms against Shottr's 17 ms.
 
-Section 3.1 gives the architecture that mitigates all three. But do not market this app as "lightweight" or "fastest" — you will be fact-checked in the first review. Market it on **privacy, price, and multi-monitor correctness**.
+Section 3.1 gives the architecture that mitigates all three. But do not market this app as "lightweight" or "fastest" — you will be fact-checked in the first review. Market it on **privacy, free, and multi-monitor correctness**.
 
-If bundle size and memory turn out to matter more than you expect after launch, the migration path is to move capture + overlay into a small Swift helper and keep Electron for the editor and settings. Section 3.6 keeps that door open.
+If bundle size and memory turn out to matter more than you expect after launch, the migration path is to move capture + overlay into a small Swift helper and keep Electron for settings (and an editor, if one returns). Section 3.6 keeps that door open.
 
 ---
 
@@ -61,7 +55,7 @@ If bundle size and memory turn out to matter more than you expect after launch, 
 
 ### 2.1 Positioning statement
 
-> A fast, local-only screenshot tool for macOS. Everything stays on your Mac — no account, no cloud, no telemetry. Buy it once.
+> A fast, local-only screenshot tool for macOS. Everything stays on your Mac — no account, no cloud, no telemetry. It's free.
 
 ### 2.2 Target user
 
@@ -69,31 +63,43 @@ Primary: developers, designers, technical writers, and support engineers on mult
 
 Secondary: privacy-constrained teams (security, legal, finance, health) whose IT will not approve a cloud screenshot tool.
 
-### 2.3 Pricing recommendation
+### 2.3 Pricing
 
-- **$19 launch price**, rising to **$29** after v1.0 settles.
-- One-time. Includes all v1.x updates. v2.0 is a paid upgrade at ~50% off for existing users.
-- **14-day trial**, full features, no watermark, no account. A watermark trial trains people to hate the product.
-- Sell direct via **Paddle or Lemon Squeezy** (they act as merchant of record and handle global VAT/sales tax — do not attempt this yourself).
-- Skip the Mac App Store for v1. Sandboxing fights nearly every requirement on your list (global shortcuts, screen capture, floating windows, launch at login). Direct distribution with Developer ID + notarization is the correct call.
+**Free.** No license, no trial countdown, no account, no payment processor, no watermark. There is no Phase for licensing in this build — it doesn't exist for v1.0.
+
+If monetization becomes relevant later, revisit it as its own scoping conversation once the free v1.0 has validated demand — don't build license-check infrastructure preemptively "just in case." Ship direct via Developer ID + notarization (§2.4 explains why the Mac App Store is still the wrong distribution channel even for a free app: sandboxing fights global shortcuts, screen capture, floating windows, and launch-at-login).
 
 ### 2.4 Scope decisions
 
-**In scope for v1.0** — your requirement list, plus:
+**In scope for v1.0** (this is the actual requirement list this build targets):
 
-- Annotation editor (arrow, rectangle, ellipse, line, freehand, text, highlight, blur/pixelate, counter/step badges, crop)
-- Scrolling capture
-- Screenshot history (last 100, local, re-openable)
-- Filename templates and configurable save folder
-- "Pin to screen" — float a capture above all windows for reference
+- Region capture — drag-select a specific screen area
+- Full-screen capture
+- Multi-monitor support, including capture across multiple monitors
+- Automatic clipboard copy
+- Automatic local save (fixed default location for v1.0, e.g. `~/Pictures/Screenshots`; configurable save folder and filename templates are a fast-follow, not required for launch)
+- Floating toolbar that appears over other apps during capture, stays visible while capturing, disappears after
+- Menu bar presence: tools and settings reachable from the tray icon
+- Global shortcuts, customizable via a recorder in Settings
+- Launch at login
+- Runs continuously in the background; main app window stays hidden; never appears in the Dock or app switcher
 
-**Explicitly out of scope for v1.0** (say no to these, ship, then reconsider):
+**Deferred — not in v1.0, may return later.** These have real design thinking already written up in this spec (§3.5, §4.5, §4.8) — that content is preserved as reference, not deleted, but none of it gets built until it's explicitly back in scope:
 
-- Screen recording / GIF — doubles your engineering surface and pulls you into codec, audio permission, and file size problems. It's a v2 headline feature, not a v1 tax.
-- Cloud upload and shareable links — contradicts your positioning and adds hosting cost, abuse handling, and GDPR obligations.
+- Annotation editor (arrows, shapes, text, blur/pixelate, crop, etc.) — §4.5
+- Scrolling capture — §3.5, §4.5 not applicable; see §3.5
+- Screenshot history — §4.8
+- "Pin to screen" floating pinned captures
+- Window capture as a distinct mode (hover-to-highlight-window, dedicated shortcut) — region capture covers the requirement list; this is extra interaction surface not currently requested
+- Licensing / payment / trial — see §2.3
+
+**Explicitly out of scope, not just deferred** (say no to these, don't reconsider without a real reason):
+
+- Screen recording / GIF — doubles engineering surface, pulls in codec/audio-permission/file-size problems.
+- Cloud upload and shareable links — contradicts the local-only positioning and adds hosting cost, abuse handling, GDPR obligations.
 - Windows or Linux — the whole product thesis is macOS-native feel.
-- OCR — tempting because macOS Vision makes it cheap, but it needs a native bridge. Move to v1.1.
-- Background/beautification presets — Xnapper owns this. Fight elsewhere.
+- OCR — needs a native Vision bridge; revisit only alongside a real editor.
+- Background/beautification presets — Xnapper owns this; not this product's fight.
 
 ---
 
@@ -118,16 +124,16 @@ Relevant flags:
 | `-t png` | Format |
 | `-T n` | Delay in seconds |
 
-Your capture path is: draw your own selection overlay in Electron → compute the rect → shell out to `screencapture -x -R … out.png` → read the file → hand to clipboard, disk, and editor.
+Your capture path is: draw your own selection overlay in Electron → compute the rect → shell out to `screencapture -x -R … out.png` → read the file → hand to clipboard and disk.
 
-**Retina caveat that will bite you.** Whether `-R` returns logical points or native pixels has varied across macOS releases, and Sonoma changed DPI metadata behaviour in the CLI. Do not assume. **Phase 0 spike:** on a Retina display and a non-Retina display, capture a known 100×100 region and assert the output PNG's pixel dimensions. If `-R` under-samples, fall back to capturing the whole display with `-D` at native resolution and cropping with `sharp` using `rect × scaleFactor`. Decide this before writing any overlay code — it determines your entire coordinate model.
+**Retina caveat — RESOLVED by Phase 0 spike, see `spikes/FINDINGS.md`.** `-R x,y,w,h` takes Electron's global point coordinates as input and returns native (scaleFactor-multiplied) pixels as output, confirmed on this dev machine's single Retina display plus an independent `-D` full-display cross-check. The negative-origin / mixed-DPI / rotated-display matrix below is still unverified — needs a second physical display.
 
 ### 3.2 Coordinate systems — the #1 source of multi-monitor bugs
 
 You will be juggling three coordinate spaces:
 
 1. **Electron `screen` API** — logical points, origin top-left of the primary display, other displays can have negative x/y.
-2. **`screencapture -R`** — global points, same origin convention (verify in the spike).
+2. **`screencapture -R`** — global points, same origin convention (confirmed in the spike for the single-display case).
 3. **Image pixels** — points × `display.scaleFactor`.
 
 **Rule: write one module, `displayManager.ts`, that owns every conversion. No other file is allowed to multiply or divide by `scaleFactor`.** Unit-test it against fixtures for: single Retina, Retina + non-Retina external, display to the left of primary (negative x), display above primary (negative y), and a vertical/rotated display.
@@ -136,10 +142,10 @@ You will be juggling three coordinate spaces:
 
 | Window | Purpose | Key properties |
 |---|---|---|
-| **Overlay** (one per display) | Region selection + floating toolbar | `transparent: true`, `frame: false`, `alwaysOnTop` at `screen-saver` level, `visibleOnAllWorkspaces: true`, `skipTaskbar`, `hasShadow: false`, `enableLargerThanScreen: true`, `fullscreenable: false` |
-| **Editor** | Annotation | Normal window, created lazily, kept alive after first use |
+| **Overlay** (one per display) | Region selection + floating toolbar | `transparent: true`, `frame: false`, `alwaysOnTop` at `screen-saver` level, `visibleOnAllWorkspaces: true` **with `{ visibleOnFullScreen: true }`** (required to render over a native-fullscreen app's own Space — confirmed by Phase 0 spike 3, see `spikes/FINDINGS.md`), `skipTaskbar`, `hasShadow: false`, `enableLargerThanScreen: true`, `fullscreenable: false` |
 | **Settings** | Preferences | Normal window, lazy |
-| **Pin** (0..n) | Floating pinned screenshots | `alwaysOnTop`, frameless, draggable |
+
+Editor and Pin windows are deferred (§2.4) — not part of the v1.0 window inventory.
 
 **Latency mitigation:** create the overlay windows at app launch, one per display, and keep them alive but hidden (`hide()`, not `close()`). On hotkey, you only call `show()` + `focus()` — sub-50 ms. Rebuild the pool on `screen.on('display-added' | 'display-removed' | 'display-metrics-changed')`.
 
@@ -153,9 +159,12 @@ Screen capture requires user consent on macOS 10.15+.
 - Known bug: the status **does not refresh within a running process** after the user flips the toggle in System Settings. Design for this — after sending the user to System Settings, show a "Restart app" button rather than polling for a change that will never arrive.
 - Add `NSScreenCaptureUsageDescription` to Info.plist via electron-builder's `extendInfo`.
 - Build a proper onboarding screen: explain *why* you need the permission, deep-link to `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`, then offer restart.
-- Accessibility permission is additionally required if scrolling capture synthesizes scroll events (see 3.5).
+- **Dev-mode gotcha, confirmed firsthand during Phase 0 spikes:** `screencapture`, invoked from a dev Electron process, needs Screen Recording permission granted to *that specific Electron binary* (`node_modules/electron/dist/Electron.app`), not the terminal and not the eventual packaged app. Without it, every capture fails with `could not create image from rect` / `could not create image from display`.
+- Accessibility permission would additionally be required if scrolling capture synthesizes scroll events — moot while scrolling capture is deferred (§3.5).
 
-### 3.5 Scrolling capture
+### 3.5 Scrolling capture — DEFERRED, not in v1.0 (§2.4)
+
+Kept here as reference design work for whenever this comes back into scope. Do not build against this section until it's explicitly back in the "in scope" list.
 
 The hardest feature on the list. Approach:
 
@@ -167,13 +176,13 @@ The hardest feature on the list. Approach:
 6. Stitch: find the vertical overlap between frame N-1 and frame N by normalized cross-correlation on a horizontal strip of rows, then append the non-overlapping remainder.
 7. Stop when a new frame produces no new content (bottom reached), or at a hard cap (e.g. 50 frames / 30 000 px tall) to prevent runaway on infinite-scroll pages.
 
-Stitching lives in `sharp` (fast, native, already a dependency for cropping). Write it as a pure function `stitch(frames: Buffer[]): Buffer` with **fixture-based tests** — generate synthetic frames from a tall test image at known offsets and assert the reconstruction matches the original. You cannot debug this feature by hand.
+Stitching would live in `sharp` (already a dependency for cropping). Write it as a pure function `stitch(frames: Buffer[]): Buffer` with **fixture-based tests** — generate synthetic frames from a tall test image at known offsets and assert the reconstruction matches the original.
 
 Known failure modes to handle gracefully: sticky headers/footers (offer a "trim edges" setting), lazy-loaded content, and horizontal scroll (out of scope — reject with a clear message).
 
 ### 3.6 Keeping the native-rewrite door open
 
-Everything that touches macOS goes behind an interface in `src/main/capture/`. If you later replace `screencapture` shell-outs with a Swift helper binary or a native Node addon, only the files inside that folder change. Do not let `child_process` or `screencapture` strings leak into overlay, editor, or settings code.
+Everything that touches macOS goes behind an interface in `src/main/capture/`. If you later replace `screencapture` shell-outs with a Swift helper binary or a native Node addon, only the files inside that folder change. Do not let `child_process` or `screencapture` strings leak into overlay or settings code (or editor code, if/when it returns).
 
 ### 3.7 Stack
 
@@ -181,12 +190,13 @@ Everything that touches macOS goes behind an interface in `src/main/capture/`. I
 Electron (latest stable)     app shell
 TypeScript, strict mode      everything
 electron-vite                build/HMR
-React + Tailwind             editor, settings (overlay uses vanilla — see below)
-sharp                        crop, stitch, encode
-electron-store               settings persistence (with a schema)
-electron-updater             auto-update from a static host
-electron-builder             packaging, signing, notarization
-Vitest + Playwright          unit + E2E
+React + Tailwind             settings window (overlay uses vanilla — see below;
+                              editor would use this too, if/when it returns)
+sharp                         crop, encode (stitch, if/when scrolling capture returns)
+electron-store                settings persistence (with a schema)
+electron-updater              auto-update from a static host — the one network call this app makes
+electron-builder              packaging, signing, notarization
+Vitest + Playwright           unit + E2E
 ```
 
 **The overlay renderer should be vanilla TS + Canvas, not React.** It must render a selection rectangle at 60 fps while tracking the mouse; React's reconciler is dead weight there and adds startup cost to the most latency-sensitive window in the app.
@@ -212,39 +222,28 @@ screenshot-app/
 │   │   ├── capture/                  ← ONLY place macOS APIs are touched
 │   │   │   ├── captureService.ts     orchestrates one capture end-to-end
 │   │   │   ├── screencapture.ts      typed wrapper over /usr/sbin/screencapture
-│   │   │   ├── displayManager.ts     ← ONLY place scaleFactor math lives
-│   │   │   ├── scrollingCapture.ts   scroll driver + frame loop
-│   │   │   └── stitcher.ts           pure image stitching
+│   │   │   └── displayManager.ts     ← ONLY place scaleFactor math lives
 │   │   ├── overlay/
 │   │   │   ├── overlayManager.ts     window pool, one per display
 │   │   │   └── overlayIpc.ts
-│   │   ├── editor/editorWindow.ts
-│   │   ├── pin/pinWindow.ts
 │   │   ├── shortcuts/
 │   │   │   ├── shortcutManager.ts    register/unregister, conflict detection
 │   │   │   └── defaults.ts
 │   │   ├── output/
 │   │   │   ├── clipboard.ts
-│   │   │   ├── fileWriter.ts         filename templates, save dir
-│   │   │   └── history.ts
+│   │   │   └── fileWriter.ts         default save location, PNG write
 │   │   ├── permissions/
-│   │   │   ├── screenRecording.ts
-│   │   │   └── accessibility.ts
+│   │   │   └── screenRecording.ts
 │   │   ├── settings/
 │   │   │   ├── store.ts              electron-store schema + migrations
 │   │   │   └── settingsWindow.ts
-│   │   ├── licensing/
-│   │   │   ├── licenseManager.ts     Ed25519 signature verification
-│   │   │   └── trial.ts
 │   │   ├── updater/autoUpdater.ts
 │   │   └── ipc/channels.ts           single source of truth for channel names
 │   ├── preload/
 │   │   ├── overlay.preload.ts
-│   │   ├── editor.preload.ts
 │   │   └── settings.preload.ts
 │   ├── renderer/
 │   │   ├── overlay/                  vanilla TS + Canvas
-│   │   ├── editor/                   React
 │   │   ├── settings/                 React
 │   │   └── shared/
 │   └── shared/types.ts               types crossing the IPC boundary
@@ -252,6 +251,8 @@ screenshot-app/
     ├── unit/
     └── fixtures/
 ```
+
+`scrollingCapture.ts`, `stitcher.ts`, `editor/`, `pin/`, `licensing/`, `output/history.ts`, and `accessibility.ts` (scrolling-capture-only) are deliberately absent — they belong to deferred features (§2.4). The current scaffold still has a few leftover stub files for the editor window from before this scope trim (`src/renderer/editor/*`, `src/preload/editor.preload.ts`, and the corresponding `electron.vite.config.ts` build input); they're inert and can be removed whenever it's convenient, or left until the editor is back in scope.
 
 ### 3.9 Security posture
 
@@ -268,7 +269,7 @@ webPreferences: {
 
 All main↔renderer traffic goes through a narrow, typed preload API. Renderers never receive `fs`, `child_process`, or raw file paths outside the app's own temp directory.
 
-Because "no telemetry" is a marketing claim, it must be literally true: the only outbound requests in the entire app are the license activation call and the update-feed check, both listed in the privacy policy. No analytics SDK, no crash reporter that phones home without consent, no font CDN.
+Because "no telemetry" is a marketing claim, it must be literally true: the only outbound request in the entire app is the update-feed check, listed in the privacy policy. No analytics SDK, no crash reporter that phones home without consent, no font CDN, no license/account call — there is no license.
 
 ---
 
@@ -279,12 +280,9 @@ Because "no telemetry" is a marketing claim, it must be literally true: the only
 Icon: monochrome template image, so it adapts to light/dark automatically. Menu:
 
 ```
-Capture Area              ⌘⇧4
-Capture Full Screen       ⌘⇧3
-Capture Window            ⌘⇧5
-Scrolling Capture         ⌘⇧6
+Capture Area              ⌃⇧4
+Capture Full Screen       ⌃⇧3
 ──────────────────
-Recent  ▸  (last 10 thumbnails → click to open in editor)
 Open Save Folder
 ──────────────────
 Settings…                 ⌘,
@@ -293,6 +291,8 @@ Pause Shortcuts
 About / Check for Updates
 Quit                      ⌘Q
 ```
+
+Shortcut labels shown here use `⌃⇧` (Control-Shift) defaults, matching §4.6 — do not default to `⌘⇧3/4` (see §4.6 for why).
 
 "Pause Shortcuts" matters more than it looks — users who record demos or play games need a kill switch that isn't Quit.
 
@@ -303,16 +303,19 @@ Quit                      ⌘Q
 3. Crosshair cursor; live magnifier loupe near the cursor showing zoomed pixels + coordinates + hex colour under the cursor. (Cheap to build, and it's the feature power users screenshot for their own reviews.)
 4. Drag to select. Show live `W × H` badge in device pixels.
 5. Modifier keys during drag: `Shift` = constrain to square, `Space` = move the existing selection, `Option` = resize from centre.
-6. Hovering without dragging highlights the window under the cursor; a single click captures that window.
-7. Arrow keys nudge the selection 1 px; `Shift`+arrow, 10 px.
-8. `Esc` cancels. Cancel must be instant and must restore focus.
-9. On mouse-up, **the overlay stays visible** and the floating toolbar appears anchored to the selection.
+6. Arrow keys nudge the selection 1 px; `Shift`+arrow, 10 px.
+7. `Esc` cancels. Cancel must be instant and must restore focus.
+8. On mouse-up, **the overlay stays visible** and the floating toolbar appears anchored to the selection.
+
+(Window-under-cursor detection / click-to-capture-a-window is deferred, §2.4 — not part of this flow for v1.0.)
 
 ### 4.3 Floating toolbar
 
 Appears at mouse-up, anchored below the selection (flip above if it would go offscreen, clamp to display bounds). Buttons:
 
-`Annotate` · `Copy` · `Save` · `Pin` · `Redo Selection` · `Cancel`
+`Copy` · `Save` · `Redo Selection` · `Cancel`
+
+(`Annotate` and `Pin` are deferred with the editor and pin-window features, §2.4.)
 
 Toolbar disappears the instant an action is chosen. Which action is the default on `Enter` is a setting — for most users it's Copy.
 
@@ -323,24 +326,26 @@ Because the toolbar lives inside the already-open overlay window, it inherits al
 Both can be on at once (default: both):
 
 - **Clipboard:** write PNG to `clipboard.writeImage()`.
-- **Disk:** write to configured folder. Filename template with tokens: `{app}`, `{title}`, `{date}`, `{time}`, `{counter}`, `{width}`, `{height}`. Default: `Screenshot {date} at {time}.png`. Sanitize aggressively — window titles contain `/` and emoji.
+- **Disk:** write to a fixed default folder (e.g. `~/Pictures/Screenshots`) as `Screenshot {date} at {time}.png`. Configurable save folder and filename templates are a fast-follow, not required for v1.0.
 
-Settings: format (PNG/JPEG/WebP), JPEG quality, whether to copy the *file path* instead of the image, and a "save silently vs. show editor first" toggle.
+Settings: format (PNG/JPEG), JPEG quality.
 
-### 4.5 Annotation editor
+### 4.5 Annotation editor — DEFERRED, not in v1.0 (§2.4)
+
+Kept here as reference design work for whenever this comes back into scope.
 
 Tools: select/move, arrow, line, rectangle, ellipse, freehand, text, highlighter, blur, pixelate, counter badge (auto-incrementing 1,2,3…), crop, spotlight/dim-outside.
 
-Requirements:
+Requirements, if/when built:
 
 - **Fully non-destructive.** Annotations are objects in a document model, not baked pixels, until export. Every tool supports select, move, resize, restyle, delete, and undo.
 - Unbounded undo/redo (`⌘Z` / `⌘⇧Z`).
 - Per-tool style memory — if the user sets arrows to red 4 px, the next arrow is red 4 px, forever.
-- Blur/pixelate must be **irreversible on export**: rasterize the blurred region into the output. Do not ship an "obfuscation" that leaves the original pixels recoverable in the file. This is a reputational landmine.
+- Blur/pixelate must be **irreversible on export**: rasterize the blurred region into the output. Do not ship an "obfuscation" that leaves the original pixels recoverable in the file. This is a reputational landmine (see CLAUDE.md Hard Rule 6).
 - Keyboard shortcut per tool (`A` arrow, `R` rect, `T` text, `B` blur…).
 - `⌘C` copies the flattened result, `⌘S` saves, `Esc` closes.
 
-**Stretch (v1.1, strong differentiator):** run macOS Vision OCR over the image, regex for emails, API-key-shaped strings, credit cards, and IPs, and offer one-click "Redact detected secrets."
+**Possible stretch, if this returns:** run macOS Vision OCR over the image, regex for emails, API-key-shaped strings, credit cards, and IPs, and offer one-click "Redact detected secrets."
 
 ### 4.6 Shortcuts
 
@@ -353,7 +358,9 @@ Requirements:
 
 `app.setLoginItemSettings({ openAtLogin, openAsHidden: true })`. On by default is acceptable for a menu bar utility, but **ask during onboarding** rather than assuming — and surface it as a toggle in Settings.
 
-### 4.8 History
+### 4.8 History — DEFERRED, not in v1.0 (§2.4)
+
+Kept here as reference design work for whenever this comes back into scope.
 
 Last 100 captures, stored as files in Application Support with a JSON index. Grid view with search by app name and date. Explicit "Clear history" and a "Never store history" privacy setting. History must respect the privacy promise: nothing leaves the disk.
 
@@ -363,73 +370,57 @@ Last 100 captures, stored as files in Application Support with a JSON index. Gri
 
 Estimates assume one focused developer working with Claude Code.
 
-### Phase 0 — Spikes (3–5 days)
+### Phase 0 — Spikes (2–4 days)
 
-Answer these before writing production code. Each is a throwaway script.
+Answer these before writing production code. Each is a throwaway script, kept in `spikes/`.
 
-1. Does `screencapture -R` return native Retina pixels? Test on Retina and non-Retina.
-2. Do global coordinates from Electron's `screen` API map 1:1 onto `screencapture -R` on a mixed-DPI, negative-origin multi-monitor setup?
+1. ✅ **Done.** Does `screencapture -R` return native Retina pixels? — confirmed yes (native pixels out, points in). See `spikes/FINDINGS.md`.
+2. 🟡 **Partially done.** Do global coordinates from Electron's `screen` API map 1:1 onto `screencapture -R` on a mixed-DPI, negative-origin multi-monitor setup? Single-display origin/edges confirmed correct; the actual negative-origin/mixed-DPI/rotated matrix still needs a second physical display.
 3. Can a transparent always-on-top `screen-saver`-level BrowserWindow cover a display *including* over a fullscreen app?
 4. Measure hotkey→overlay-visible latency with a pre-warmed hidden window pool. Target < 80 ms.
-5. Can you synthesize a scroll event into another app, and what permission does it actually cost?
+5. ~~Can you synthesize a scroll event into another app, and what permission does it actually cost?~~ Deferred along with scrolling capture (§2.4/§3.5) — skip for now.
 
 **Gate:** if spike 1 or 2 fails, the coordinate model changes and Phase 3 must be redesigned. Do not skip.
 
-### Phase 1 — Skeleton (1 week)
+### Phase 1 — Skeleton (1 week) — ✅ done
 
-Menu bar tray, `LSUIElement`, dock hidden, single-instance lock, settings store with schema, permission check + onboarding screen, launch-at-login, build pipeline producing a runnable `.app`.
+Menu bar tray, `LSUIElement`, dock hidden, single-instance lock, build pipeline producing a runnable `.app`. (Settings store schema, permission check + onboarding screen, and launch-at-login are still open — small enough to fold into Phase 2/5 rather than reopening this phase.)
 
 **Done when:** app launches to the menu bar, survives a restart, and correctly reports permission state.
 
 ### Phase 2 — Basic capture (1 week)
 
-`screencapture.ts` wrapper, `displayManager.ts` with full unit tests, full-screen and per-display capture, clipboard write, file write with templates.
+`screencapture.ts` wrapper, `displayManager.ts` with full unit tests, full-screen and per-display capture, clipboard write, file write to the default save folder. Permission check + onboarding screen belongs here too.
 
 **Done when:** a hotkey captures the correct display at correct resolution on a 3-monitor mixed-DPI rig.
 
 ### Phase 3 — Region selection (1.5–2 weeks)
 
-Overlay window pool, Canvas selection UI, magnifier loupe, modifier keys, window-under-cursor detection, multi-display drag, focus restore.
+Overlay window pool, Canvas selection UI, magnifier loupe, modifier keys, multi-display drag, focus restore.
 
 **Done when:** selecting a region that spans the boundary between two displays with different scale factors produces a correct image.
 
 ### Phase 4 — Floating toolbar (3–4 days)
 
-Anchored toolbar, edge flipping, actions wired, disappears on action.
+Anchored toolbar (Copy / Save / Redo Selection / Cancel), edge flipping, actions wired, disappears on action.
 
-### Phase 5 — Annotation editor (2–3 weeks)
+### Phase 5 — Settings & shortcuts (1 week)
 
-The largest single chunk. Document model first, then tools one at a time, then undo/redo, then export flattening.
+Settings window, shortcut recorder, conflict detection, launch-at-login toggle, all preferences wired and persisted.
 
-**Done when:** blur is provably irreversible in the exported file.
+### Phase 6 — Polish (3–4 days)
 
-### Phase 6 — Settings & shortcuts (1 week)
+Empty states, error states, app icon, onboarding polish.
 
-Settings window, shortcut recorder, conflict detection, all preferences wired and persisted.
-
-### Phase 7 — Scrolling capture (1.5–2 weeks)
-
-Stitcher with fixture tests first, then the scroll driver, then the UI. Test against: Safari, Chrome, Slack, Notes, VS Code, a Finder list view, and a Notion page.
-
-### Phase 8 — History & polish (1 week)
-
-History store + grid, pin windows, empty states, error states, app icon, onboarding polish.
-
-### Phase 9 — Licensing (4–5 days)
-
-Trial countdown, license entry, **Ed25519-signed license keys verified offline** (public key embedded in app; no server round-trip needed after activation), Paddle/Lemon Squeezy webhook → key issuance.
-
-Accept that a determined user can crack any client-side check. Optimize for *not annoying honest customers*, not for perfect enforcement.
-
-### Phase 10 — Ship (1 week)
+### Phase 7 — Ship (1 week)
 
 Developer ID signing, hardened runtime, entitlements, notarization + stapling, DMG with drag-to-Applications, `electron-updater` feed on S3/R2, privacy policy, landing page.
 
-**Total: roughly 11–14 weeks** to a credible paid v1.0.
+**Total: roughly 6–8 weeks** to a credible free v1.0.
 
-### Suggested cut for an earlier revenue signal
+### Deferred to post-v1.0 (§2.4) — not scheduled, no phase number
 
-Ship **Phases 0–4 + 6 + 9 + 10** as v0.9 beta (~7 weeks) — capture, toolbar, settings, licensing, distribution, no editor and no scrolling capture. Sell it at $9 as an "early access, price locked forever" deal. That validates demand before you spend 5 weeks on the editor and stitcher.
+Annotation editor, scrolling capture, screenshot history, pin-to-screen, and any licensing/monetization work. Each has design notes preserved in this spec (§3.5, §4.5, §4.8) for whenever it's explicitly brought back into scope — don't start on these without that explicit decision.
 
 ---
 
@@ -437,14 +428,12 @@ Ship **Phases 0–4 + 6 + 9 + 10** as v0.9 beta (~7 weeks) — capture, toolbar,
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| `screencapture -R` doesn't give native pixels | Rewrites the coordinate model | Phase 0 spike; crop-from-full-display fallback ready |
-| Electron bundle size hurts reviews | Lost sales to Shottr comparisons | Don't compete on size; prune with `asar` + `files` allowlist; consider Swift helper in v2 |
-| Multi-monitor edge cases | Bad reviews from exactly your target user | `displayManager` unit tests; beta test on borrowed rigs |
-| Scrolling capture unreliable on some apps | Refund requests | Ship a documented compatibility list; fail loudly with a clear message rather than producing a mangled image |
+| `screencapture -R` doesn't give native pixels | Rewrites the coordinate model | Phase 0 spike (done — confirmed native pixels, no fallback needed) |
+| Electron bundle size hurts reviews | Unfavorable Shottr comparisons | Don't compete on size; prune with `asar` + `files` allowlist; consider Swift helper later |
+| Multi-monitor edge cases | Bad reviews from exactly the target user | `displayManager` unit tests; test on a real multi-monitor rig before shipping (spike 2 is still open) |
 | Screen Recording permission confusion | Support burden, 1-star "doesn't work" reviews | Dedicated onboarding screen with deep link + restart button |
-| Apple ships scrolling capture in a macOS update | Feature parity loss | Positioning is privacy + price, not any single feature |
-| Notarization rejection | Launch delay | Notarize from Phase 1, not Phase 10 — find the problems early |
-| Solo maintenance load | Burnout | Ruthless v1 scope; the "out of scope" list in 2.4 is load-bearing |
+| Notarization rejection | Launch delay | Notarize from Phase 1, not Phase 7 — find the problems early |
+| Solo maintenance load | Burnout | Ruthless v1 scope; the "deferred" and "out of scope" lists in §2.4 are load-bearing |
 
 ---
 
@@ -455,7 +444,6 @@ Ship **Phases 0–4 + 6 + 9 + 10** as v0.9 beta (~7 weeks) — capture, toolbar,
 - Idle memory: **< 200 MB** RSS
 - Zero unhandled network requests, verifiable with Little Snitch — this is a claim you should invite reviewers to test
 - Correct output on a 3-display mixed-DPI setup including a negative-origin and a rotated display
-- Scrolling capture succeeds on Safari, Chrome, and Slack
 - Notarized, stapled, opens on a clean Mac with no Gatekeeper warning
 
 ---

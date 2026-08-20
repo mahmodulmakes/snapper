@@ -6,7 +6,7 @@ Instructions for Claude Code working in this repository.
 
 ## What this project is
 
-A macOS menu-bar screenshot app built with Electron + TypeScript, sold as a one-time-purchase commercial product.
+A macOS menu-bar screenshot app built with Electron + TypeScript. **v1.0 is free** — no purchase, no license, no account.
 
 **Positioning: local-only, no account, no cloud, no telemetry.** This is the product's entire reason to exist against CleanShot X and Shottr. It constrains what you are allowed to build — see "Hard rules" below.
 
@@ -16,7 +16,7 @@ Full product spec lives in `BUILD-SPEC.md`. Read it before starting a new phase.
 
 ## Hard rules — never violate these
 
-1. **No network requests except two.** License activation and the update-feed check. No analytics, no crash reporting that phones home, no font/CDN fetches, no "just for debugging" pings. If a dependency makes a network call at runtime, it does not go in this project. If you think you need a third network call, stop and ask.
+1. **No network requests except one.** The update-feed check (electron-updater). No analytics, no crash reporting that phones home, no font/CDN fetches, no "just for debugging" pings, no license/account calls — there is no license, the app is free. If a dependency makes a network call at runtime, it does not go in this project. If you think you need a second network call, stop and ask.
 
 2. **All macOS system access lives in `src/main/capture/`.** `child_process`, `screencapture`, AppleScript, and any native bridging appear nowhere else in the codebase. This keeps a future Swift-helper rewrite contained.
 
@@ -26,7 +26,7 @@ Full product spec lives in `BUILD-SPEC.md`. Read it before starting a new phase.
 
 5. **Never expose `fs`, `child_process`, `shell`, or arbitrary paths to a renderer.** Renderers get a narrow, typed API surface through preload and nothing else.
 
-6. **Blur and pixelate must be destructive on export.** The exported file must not contain recoverable original pixels under a redaction. This is a security promise, not a visual effect.
+6. **Blur and pixelate must be destructive on export.** The exported file must not contain recoverable original pixels under a redaction. This is a security promise, not a visual effect. (Applies once the annotation editor ships — it's deferred, out of v1.0 scope. Don't let this rule lapse when it comes back.)
 
 7. **Never write files outside the user's configured save folder, the app's Application Support directory, or the app's temp directory.**
 
@@ -40,7 +40,7 @@ Full product spec lives in `BUILD-SPEC.md`. Read it before starting a new phase.
 
 ```
 src/
-├── main/        Node context. Owns capture, windows, shortcuts, files, licensing.
+├── main/        Node context. Owns capture, windows, shortcuts, files.
 ├── preload/     One preload per window type. Typed, minimal, explicit.
 ├── renderer/    Browser context. UI only. Zero Node access.
 └── shared/      Types that cross the IPC boundary. No runtime logic.
@@ -53,16 +53,16 @@ src/
 | Running `screencapture` | `main/capture/screencapture.ts` |
 | Display enumeration, coordinate/scale conversion | `main/capture/displayManager.ts` |
 | Orchestrating one capture end-to-end | `main/capture/captureService.ts` |
-| Scroll driving + frame loop | `main/capture/scrollingCapture.ts` |
-| Image stitching (pure function) | `main/capture/stitcher.ts` |
 | Overlay window pool | `main/overlay/overlayManager.ts` |
 | Global shortcut registration | `main/shortcuts/shortcutManager.ts` |
 | Persisted settings | `main/settings/store.ts` |
 | IPC channel names | `main/ipc/channels.ts` |
 
+Scrolling capture (`scrollingCapture.ts`, `stitcher.ts`), the annotation editor, history, and pin windows are **deferred, not in v1.0 scope** — see BUILD-SPEC.md §2.4. Don't build ownership around them until they're back in scope.
+
 **IPC discipline:** every channel name is a constant in `main/ipc/channels.ts`. No string literals for channels anywhere else. Every payload type is declared in `shared/types.ts`.
 
-**Overlay renderer is vanilla TypeScript + Canvas. Do not put React in it.** It must hit 60 fps and start in single-digit milliseconds. React goes in the editor and settings windows only.
+**Overlay renderer is vanilla TypeScript + Canvas. Do not put React in it.** It must hit 60 fps and start in single-digit milliseconds. React is for the settings window only (v1.0 has no editor window).
 
 ---
 
@@ -94,8 +94,8 @@ When implementing anything here, add a unit test case to `test/unit/displayManag
 
 ## Testing
 
-- **`stitcher.ts` and `displayManager.ts` require unit tests. Non-negotiable.** Both are pure-ish, both are impossible to debug by hand, both are where the expensive bugs live.
-- Stitcher tests use fixtures: slice a tall known image into overlapping frames at known offsets, stitch, assert the result matches the original within tolerance.
+- **`displayManager.ts` requires unit tests. Non-negotiable.** It's pure-ish, impossible to debug by hand, and where the expensive multi-monitor bugs live.
+- If/when scrolling capture returns to scope, `stitcher.ts` gets the same treatment: fixture-based tests that slice a tall known image into overlapping frames at known offsets, stitch, and assert the result matches the original within tolerance.
 - Run `npm test` before declaring any task done.
 - UI work needs a manual verification note in your summary: what you clicked, on what display setup, what you observed.
 
@@ -132,7 +132,7 @@ npm run dist         # signed, notarized .dmg (needs Apple creds in env)
 - **Creating overlay windows on hotkey press.** Too slow. Pre-warm one hidden window per display at launch; rebuild the pool on display change events.
 - **Polling `getMediaAccessStatus('screen')` after sending the user to System Settings.** It does not refresh inside a running process. Offer a restart instead.
 - **Defaulting shortcuts to `⌘⇧3/4/5`.** Those belong to macOS. Ship on `⌃⇧` and offer a guided takeover.
-- **Baking annotations into pixels as the user draws.** The editor document model is non-destructive until export. Everything must stay editable and undoable.
+- **Baking annotations into pixels as the user draws** (applies once the annotation editor is back in scope — see BUILD-SPEC.md §2.4). The editor document model is non-destructive until export. Everything must stay editable and undoable.
 - **Adding a "quick cloud upload" convenience feature.** It kills the product's only real differentiator. Out of scope, permanently, for v1.
 
 ---
