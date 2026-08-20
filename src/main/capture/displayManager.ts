@@ -1,12 +1,7 @@
 import type { RectInPoints } from '../../shared/types'
 
 // The ONLY file allowed to touch coordinate/scaleFactor conversion
-// (CLAUDE.md Hard Rule 3, BUILD-SPEC.md §3.2). Nothing here multiplies or
-// divides by scaleFactor yet — that lands in Phase 2 alongside
-// screencapture.ts, once captures actually need pixel-space rects. For now
-// this owns the one conversion Phase 3's overlay needs: translating a
-// selection rect from a single overlay window's local points into global
-// Electron points, by adding that window's screen origin.
+// (CLAUDE.md Hard Rule 3, BUILD-SPEC.md §3.2).
 
 /**
  * Converts a rect reported in one overlay window's local points into global
@@ -21,5 +16,24 @@ export function overlayLocalRectToGlobalPoints(
     y: windowOriginInPoints.y + localRectInPoints.y,
     width: localRectInPoints.width,
     height: localRectInPoints.height
+  }
+}
+
+export interface PixelDimensions {
+  width: number
+  height: number
+}
+
+/**
+ * What a captured PNG's pixel dimensions should be for a rect on a display
+ * with the given scaleFactor. Phase 0 spike 1 confirmed `screencapture -R`
+ * takes points in and returns native (scaleFactor-multiplied) pixels out —
+ * this is for validating that a capture's actual output matches, not for
+ * building the `-R` argument itself (that stays in points, unmodified).
+ */
+export function expectedPixelDimensions(rectInPoints: RectInPoints, scaleFactor: number): PixelDimensions {
+  return {
+    width: Math.round(rectInPoints.width * scaleFactor),
+    height: Math.round(rectInPoints.height * scaleFactor)
   }
 }

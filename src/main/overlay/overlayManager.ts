@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { captureRectAndOutput } from '../capture/captureService'
 import { overlayLocalRectToGlobalPoints } from '../capture/displayManager'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
@@ -107,8 +108,11 @@ function rebuildOverlayWindowsSafely(): void {
 
 /**
  * A selection was finalized in one overlay window. Converts it from that
- * window's local points to global Electron points and logs it — there's no
- * capture pipeline to hand it to yet (that's `captureService.ts`, Phase 2).
+ * window's local points to global Electron points and captures it —
+ * clipboard + disk, both on by default (BUILD-SPEC.md §4.4). There's no
+ * floating toolbar yet (Phase 4) to offer Copy/Save/Cancel as separate
+ * choices, so mouse-up captures immediately; that gap closes once the
+ * toolbar exists.
  */
 function handleSelectionComplete(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
   const entry = overlays.find((o) => o.window.webContents === event.sender)
@@ -118,7 +122,10 @@ function handleSelectionComplete(event: IpcMainEvent, localRectInPoints: RectInP
   }
   const windowOriginInPoints = entry.window.getBounds()
   const globalRectInPoints = overlayLocalRectToGlobalPoints(windowOriginInPoints, localRectInPoints)
-  logger.info(`Selection completed on display ${entry.displayId}: ${JSON.stringify(globalRectInPoints)}`)
+  hideOverlays()
+  captureRectAndOutput(globalRectInPoints).catch((err: unknown) => {
+    logger.error('Capture from region selection failed unexpectedly.', err)
+  })
 }
 
 /**
