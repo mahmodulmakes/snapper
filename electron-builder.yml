@@ -1,0 +1,34 @@
+appId: com.screenshotapp.macos
+productName: Screenshot
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - '**/*.node'
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [universal]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    LSUIElement: true
+    NSScreenCaptureUsageDescription: >-
+      Screenshot needs Screen Recording access to capture your screen.
+      Nothing captured ever leaves your Mac.
+dmg:
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+afterSign: build/notarize.cjs
