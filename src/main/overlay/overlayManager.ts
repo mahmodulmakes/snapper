@@ -1,8 +1,10 @@
-import { BrowserWindow, ipcMain, screen, type Display } from 'electron'
+import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { overlayLocalRectToGlobalPoints } from '../capture/displayManager'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
+import type { RectInPoints } from '../../shared/types'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -104,6 +106,22 @@ function rebuildOverlayWindowsSafely(): void {
 }
 
 /**
+ * A selection was finalized in one overlay window. Converts it from that
+ * window's local points to global Electron points and logs it — there's no
+ * capture pipeline to hand it to yet (that's `captureService.ts`, Phase 2).
+ */
+function handleSelectionComplete(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
+  const entry = overlays.find((o) => o.window.webContents === event.sender)
+  if (!entry) {
+    logger.error('Received a selection from an overlay window not in the pool.', { localRectInPoints })
+    return
+  }
+  const windowOriginInPoints = entry.window.getBounds()
+  const globalRectInPoints = overlayLocalRectToGlobalPoints(windowOriginInPoints, localRectInPoints)
+  logger.info(`Selection completed on display ${entry.displayId}: ${JSON.stringify(globalRectInPoints)}`)
+}
+
+/**
  * Pre-warms one hidden overlay window per display and keeps the pool in sync
  * with display changes. Call once at app startup (BUILD-SPEC.md §3.3 —
  * creating overlay windows on hotkey press is too slow).
@@ -116,6 +134,7 @@ export function initOverlayWindows(): void {
     screen.on('display-removed', rebuildOverlayWindowsSafely)
     screen.on('display-metrics-changed', rebuildOverlayWindowsSafely)
     ipcMain.on(IPC.OVERLAY_DISMISS, () => hideOverlays())
+    ipcMain.on(IPC.OVERLAY_SELECTION_COMPLETE, handleSelectionComplete)
     listenersRegistered = true
   }
 }
@@ -125,6 +144,7 @@ export function teardownOverlayWindows(): void {
   screen.removeListener('display-removed', rebuildOverlayWindowsSafely)
   screen.removeListener('display-metrics-changed', rebuildOverlayWindowsSafely)
   ipcMain.removeAllListeners(IPC.OVERLAY_DISMISS)
+  ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_COMPLETE)
   listenersRegistered = false
   destroyOverlayWindows()
 }
@@ -132,6 +152,10 @@ export function teardownOverlayWindows(): void {
 /** Shows every display's overlay simultaneously (BUILD-SPEC.md §4.2 step 2). */
 export function showOverlays(): void {
   for (const entry of overlays) {
+    // Clear any selection left over from the previous capture before the
+    // window becomes visible again — these windows are hidden, not
+    // destroyed, so renderer state persists across show/hide cycles.
+    entry.window.webContents.send(IPC.OVERLAY_RESET)
     entry.window.show()
     entry.window.focus()
   }
