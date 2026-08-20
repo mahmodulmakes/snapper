@@ -4,6 +4,7 @@ import { captureRectAndOutput } from './capture/captureService'
 import { defaultSaveDirectory } from './output/fileWriter'
 import { initOnboarding, showOnboardingWindow, teardownOnboarding } from './permissions/onboardingWindow'
 import { isScreenRecordingGranted } from './permissions/screenRecording'
+import { syncLaunchAtLogin } from './settings/launchAtLogin'
 import { createTray, destroyTray } from './tray/trayManager'
 import { initOverlayWindows, showOverlays, teardownOverlayWindows } from './overlay/overlayManager'
 import { logger } from './logger'
@@ -65,6 +66,7 @@ if (!gotSingleInstanceLock) {
     })
     initOverlayWindows()
     initOnboarding()
+    syncLaunchAtLogin()
     if (!isScreenRecordingGranted()) {
       showOnboardingWindow()
     }
