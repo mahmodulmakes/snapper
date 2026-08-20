@@ -4,10 +4,15 @@ import { captureRectAndOutput } from './capture/captureService'
 import { defaultSaveDirectory } from './output/fileWriter'
 import { initOnboarding, showOnboardingWindow, teardownOnboarding } from './permissions/onboardingWindow'
 import { isScreenRecordingGranted } from './permissions/screenRecording'
+import { initSettingsIpc, teardownSettingsIpc } from './settings/settingsIpc'
+import { showSettingsWindow, closeSettingsWindow } from './settings/settingsWindow'
 import { syncLaunchAtLogin } from './settings/launchAtLogin'
-import { createTray, destroyTray } from './tray/trayManager'
+import { getSettingsStore } from './settings/store'
+import { initShortcuts, onShortcutStateChange, setShortcutsPaused, teardownShortcuts } from './shortcuts/shortcutManager'
+import { createTray, destroyTray, updateTrayMenu } from './tray/trayManager'
 import { initOverlayWindows, showOverlays, teardownOverlayWindows } from './overlay/overlayManager'
 import { logger } from './logger'
+import type { TrayMenuHandlers, TrayMenuState } from './tray/menuBuilder'
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
@@ -45,6 +50,23 @@ function openSaveFolder(): void {
     })
 }
 
+function togglePauseShortcuts(): void {
+  setShortcutsPaused(!getSettingsStore().get('shortcutsPaused'))
+}
+
+const trayHandlers: TrayMenuHandlers = {
+  onCaptureArea: captureArea,
+  onCaptureFullScreen: captureFullScreen,
+  onOpenSaveFolder: openSaveFolder,
+  onOpenSettings: showSettingsWindow,
+  onTogglePauseShortcuts: togglePauseShortcuts
+}
+
+function currentTrayState(): TrayMenuState {
+  const store = getSettingsStore()
+  return { shortcuts: store.get('shortcuts'), shortcutsPaused: store.get('shortcutsPaused') }
+}
+
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
@@ -59,14 +81,13 @@ if (!gotSingleInstanceLock) {
   app.dock?.hide()
 
   app.whenReady().then(() => {
-    createTray({
-      onCaptureArea: captureArea,
-      onCaptureFullScreen: captureFullScreen,
-      onOpenSaveFolder: openSaveFolder
-    })
+    createTray(trayHandlers, currentTrayState())
     initOverlayWindows()
     initOnboarding()
+    initSettingsIpc()
     syncLaunchAtLogin()
+    initShortcuts({ captureArea, captureFullScreen })
+    onShortcutStateChange(() => updateTrayMenu(trayHandlers, currentTrayState()))
     if (!isScreenRecordingGranted()) {
       showOnboardingWindow()
     }
@@ -81,5 +102,8 @@ if (!gotSingleInstanceLock) {
     destroyTray()
     teardownOverlayWindows()
     teardownOnboarding()
+    teardownSettingsIpc()
+    teardownShortcuts()
+    closeSettingsWindow()
   })
 }

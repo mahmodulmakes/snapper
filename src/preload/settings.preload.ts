@@ -1,4 +1,12 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
+import { IPC } from '../main/ipc/channels'
+import type { SettingsState, ShortcutActionId } from '../shared/types'
 
-// Populate via contextBridge.exposeInMainWorld once settings IPC lands (Phase 6).
-contextBridge.exposeInMainWorld('settingsApi', {})
+contextBridge.exposeInMainWorld('settingsApi', {
+  getState: (): Promise<SettingsState> => ipcRenderer.invoke(IPC.SETTINGS_GET_STATE),
+  setLaunchAtLogin: (enabled: boolean): void => ipcRenderer.send(IPC.SETTINGS_SET_LAUNCH_AT_LOGIN, enabled),
+  setShortcutsPaused: (paused: boolean): void => ipcRenderer.send(IPC.SETTINGS_SET_SHORTCUTS_PAUSED, paused),
+  setShortcut: (id: ShortcutActionId, accelerator: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.SETTINGS_SET_SHORTCUT, id, accelerator),
+  openKeyboardSettings: (): void => ipcRenderer.send(IPC.SETTINGS_OPEN_KEYBOARD_SETTINGS)
+})

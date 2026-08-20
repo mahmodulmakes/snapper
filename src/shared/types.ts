@@ -9,3 +9,13 @@ export interface RectInPoints {
   width: number
   height: number
 }
+
+export type ShortcutActionId = 'captureArea' | 'captureFullScreen'
+
+export type ShortcutBindings = Record<ShortcutActionId, string>
+
+export interface SettingsState {
+  launchAtLogin: boolean
+  shortcuts: ShortcutBindings
+  shortcutsPaused: boolean
+}

@@ -1,0 +1,108 @@
+import { globalShortcut, powerMonitor } from 'electron'
+import { getSettingsStore } from '../settings/store'
+import { logger } from '../logger'
+import type { ShortcutActionId } from '../../shared/types'
+
+type ActionHandlers = Record<ShortcutActionId, () => void>
+
+let handlers: ActionHandlers | null = null
+let registeredAccelerators: Partial<Record<ShortcutActionId, string>> = {}
+let onStateChangeCallback: (() => void) | null = null
+let listenersRegistered = false
+
+/** Settings/tray UI calls this to be told when bindings, conflicts, or pause state change. */
+export function onShortcutStateChange(callback: () => void): void {
+  onStateChangeCallback = callback
+}
+
+function notifyStateChange(): void {
+  onStateChangeCallback?.()
+}
+
+function registerOne(id: ShortcutActionId, accelerator: string): boolean {
+  if (!handlers) return false
+  try {
+    const ok = globalShortcut.register(accelerator, handlers[id])
+    if (ok) {
+      registeredAccelerators[id] = accelerator
+    } else {
+      logger.error(`Shortcut conflict: "${accelerator}" for ${id} is already owned by another app.`)
+    }
+    return ok
+  } catch (err) {
+    // Electron throws on a malformed accelerator string rather than returning false.
+    logger.error(`Invalid accelerator "${accelerator}" for ${id}.`, err)
+    return false
+  }
+}
+
+function registerAll(): void {
+  globalShortcut.unregisterAll()
+  registeredAccelerators = {}
+  if (!handlers) return
+
+  if (getSettingsStore().get('shortcutsPaused')) {
+    logger.info('Shortcuts paused; not registering.')
+    notifyStateChange()
+    return
+  }
+
+  const bindings = getSettingsStore().get('shortcuts')
+  for (const id of Object.keys(bindings) as ShortcutActionId[]) {
+    registerOne(id, bindings[id])
+  }
+  notifyStateChange()
+}
+
+/** Registers the default (or previously saved) shortcuts. Call once at startup. */
+export function initShortcuts(actionHandlers: ActionHandlers): void {
+  handlers = actionHandlers
+  registerAll()
+
+  if (!listenersRegistered) {
+    // BUILD-SPEC.md §4.6: re-register after wake-from-sleep.
+    powerMonitor.on('resume', () => {
+      logger.info('Woke from sleep; re-registering shortcuts.')
+      registerAll()
+    })
+    listenersRegistered = true
+  }
+}
+
+export function teardownShortcuts(): void {
+  globalShortcut.unregisterAll()
+  registeredAccelerators = {}
+  handlers = null
+}
+
+/** Which accelerator is actually live for each action right now (may differ from the store if a conflict was hit). */
+export function getRegisteredAccelerators(): Partial<Record<ShortcutActionId, string>> {
+  return { ...registeredAccelerators }
+}
+
+/**
+ * Attempts to rebind one action (the Settings recorder widget). Returns
+ * false on conflict and leaves the previous binding registered and
+ * persisted — never silently drop a working shortcut for a broken one
+ * (CLAUDE.md: detect conflicts, surface them, never fail silently).
+ */
+export function trySetShortcut(id: ShortcutActionId, accelerator: string): boolean {
+  if (!handlers) return false
+  const previous = registeredAccelerators[id]
+  if (previous) globalShortcut.unregister(previous)
+
+  const ok = registerOne(id, accelerator)
+  if (ok) {
+    const bindings = { ...getSettingsStore().get('shortcuts'), [id]: accelerator }
+    getSettingsStore().set('shortcuts', bindings)
+  } else if (previous) {
+    registerOne(id, previous)
+  }
+  notifyStateChange()
+  return ok
+}
+
+export function setShortcutsPaused(paused: boolean): void {
+  getSettingsStore().set('shortcutsPaused', paused)
+  registerAll()
+}
