@@ -9,7 +9,7 @@ const PLACEHOLDER_ICON = nativeImage.createFromDataURL(
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 )
 
-export function createTray(): Tray {
+export function createTray(onCaptureArea: () => void): Tray {
   if (tray) return tray
 
   const icon = PLACEHOLDER_ICON
@@ -17,7 +17,7 @@ export function createTray(): Tray {
 
   tray = new Tray(icon)
   tray.setToolTip('Screenshot')
-  tray.setContextMenu(buildTrayMenu())
+  tray.setContextMenu(buildTrayMenu(onCaptureArea))
 
   return tray
 }

@@ -29,5 +29,16 @@ export default tseslint.config(
       '@typescript-eslint/no-require-imports': 'off',
       'no-console': 'off'
     }
+  },
+  {
+    // Throwaway Phase 0 spike scripts (CLAUDE.md "Working style" / BUILD-SPEC.md
+    // §5) — not app code, console output is the whole point.
+    files: ['spikes/**/*.js'],
+    languageOptions: {
+      globals: globals.node
+    },
+    rules: {
+      'no-console': 'off'
+    }
   }
 )
