@@ -1,4 +1,4 @@
-# Phase 0 spike findings — spikes 1 & 2
+# Phase 0 spike findings — spikes 1, 2 & 3
 
 Ran `spikes/coordinate-spike.js` (throwaway, not app code) on:
 
@@ -36,6 +36,43 @@ What's confirmed:
 Spike 1 does not contradict the spec's assumptions — it resolves the open question in the direction the spec's primary hypothesis expected (native pixels), so no redesign is triggered.
 
 Spike 2 is **incomplete, not failed**. The single-display coordinate convention checks out, but the negative-origin/mixed-DPI/rotation matrix that `displayManager.ts`'s unit tests are required to cover (CLAUDE.md, "Coordinate systems" section) cannot be exercised without a second monitor. Do not write `displayManager.ts`'s multi-display conversion logic as final until that's run — re-run `spikes/coordinate-spike.js` with an external display attached first.
+
+## Spike 3 — can a transparent always-on-top overlay render above a fullscreen app?
+
+Ran `spikes/overlay-fullscreen-spike.js` (throwaway) in two phases: `windowed` (fully automated — opens TextEdit, captures a magenta marker window on top of it) and `fullscreen` (needs a human to actually put an app into native fullscreen first; the script then activates it via `osascript ... to activate` before each capture so the correct macOS Space is active — see "Methodology pitfalls" below).
+
+**Method:** show a full-display transparent window with an opaque magenta marker centered on it, capture the whole display with the real `screencapture` binary (not Electron's own state — this proves the actual composited result), and sample the center pixel. Magenta = the overlay won the z-order fight.
+
+### Result: confirmed, but the default `alwaysOnTop` reading of BUILD-SPEC.md's own window table was NOT enough — and one of that table's *other* listed properties actively broke it
+
+**Normal windowed app (round 1):** `setAlwaysOnTop(true, 'screen-saver')` + `setVisibleOnAllWorkspaces(true)` (no extra options) is sufficient. Marker rendered cleanly over both TextEdit and this Claude Code window. See `round1-windowed-configA.png`.
+
+**Native fullscreen app, first pass (rounds 2–4):** same settings, plus `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` — the option Electron's docs say is required to cross into another app's fullscreen Space. **Still failed** — marker never appeared over fullscreen Safari, in any round.
+
+**Root cause, isolated in rounds 5–6:** BUILD-SPEC.md's own §3.3 window property table lists `fullscreenable: false` for the overlay window *alongside* `visibleOnAllWorkspaces: true` — these two conflict on macOS. A window built with `fullscreenable: false` never gets the NSWindow collection-behavior bits needed to join another app's fullscreen Space, no matter what `setVisibleOnAllWorkspaces` options are passed. Calling `win.setFullScreenable(true)` *after* construction did not fix it either (round 5) — this is fixed at construction time. Only a window built with `fullscreenable: true` from the `BrowserWindow` constructor, combined with `setAlwaysOnTop(true, 'screen-saver')` and `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`, actually rendered over fullscreen Safari (round 6, `round6-fullscreen-fresh-fullscreenable.png` — confirmed visually, solid magenta, exact `rgb(255,0,255)` sample).
+
+**Click-through sanity check (round 7):** with the working config above, calling `setIgnoreMouseEvents(true, { forward: true })` does not affect visibility — marker stayed visible after enabling click-through. Click-through and fullscreen-visibility are independent, no conflict there.
+
+### Consequence for `overlayManager.ts` — BUILD-SPEC.md §3.3 was wrong on one property
+
+The overlay window must be built with **`fullscreenable: true`**, not `false` as the spec originally stated. In practice this is safe: the overlay is frameless (`frame: false`) and has no title bar, so there's no user-visible affordance (no green button) that would let someone actually trigger fullscreen on it — `fullscreenable: true` only unlocks the *collection behavior* needed to render over other apps' fullscreen Spaces, it doesn't invite the user to fullscreen the overlay itself. Just don't ever call `win.setFullScreen(true)` on it.
+
+Full working overlay window recipe, confirmed empirically:
+```ts
+new BrowserWindow({
+  // ...bounds, transparent: true, frame: false, hasShadow: false, skipTaskbar: true,
+  fullscreenable: true,   // NOT false — false silently breaks visibleOnFullScreen
+  enableLargerThanScreen: true,
+})
+win.setAlwaysOnTop(true, 'screen-saver')
+win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+```
+
+### Methodology pitfalls hit along the way (worth knowing if this gets re-run)
+
+1. **CSP silently ate the marker's `<style>` block.** The spike's `overlay-marker.html` initially had `default-src 'self'; script-src 'none'` with no `style-src`, which blocks inline `<style>` under CSP (inline styles need `'unsafe-inline'` explicitly, `'self'` doesn't cover them). Result: the marker rendered with default UA sizing at the top-left corner instead of a centered 200×200 box, which looked exactly like a z-order failure until `getBoundingClientRect()` debugging caught it. Fixed by adding `style-src 'unsafe-inline'`.
+2. **`open -a TextEdit` can trigger an Open-file picker sheet** instead of a plain document window, and that sheet sits at an even higher window level than a normal window — it covered the marker and looked like another z-order failure. Fixed by launching TextEdit via `osascript ... make new document` instead.
+3. **The active macOS Space follows human attention, not the app being tested.** The first fullscreen-phase run captured the *wrong* Space entirely — Safari was genuinely fullscreen, but because the human was looking at/typing into Claude Code (a normal-Space app) when the capture fired, macOS's active Space was the normal desktop, not Safari's fullscreen Space. The Dock and a normal menu bar were plainly visible in the "fullscreen" capture, which was the tell. Fixed by having the script explicitly `osascript -e 'tell application "Safari" to activate'` immediately before each capture, forcing the correct Space to be active regardless of where the human's attention is — this also matches real product behavior more closely (a hotkey fires while some app is what the user is actually looking at).
 
 ## One-time setup note for anyone re-running this
 

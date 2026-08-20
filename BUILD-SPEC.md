@@ -142,7 +142,9 @@ You will be juggling three coordinate spaces:
 
 | Window | Purpose | Key properties |
 |---|---|---|
-| **Overlay** (one per display) | Region selection + floating toolbar | `transparent: true`, `frame: false`, `alwaysOnTop` at `screen-saver` level, `visibleOnAllWorkspaces: true` **with `{ visibleOnFullScreen: true }`** (required to render over a native-fullscreen app's own Space — confirmed by Phase 0 spike 3, see `spikes/FINDINGS.md`), `skipTaskbar`, `hasShadow: false`, `enableLargerThanScreen: true`, `fullscreenable: false` |
+| **Overlay** (one per display) | Region selection + floating toolbar | `transparent: true`, `frame: false`, `alwaysOnTop` at `screen-saver` level, `visibleOnAllWorkspaces: true` **with `{ visibleOnFullScreen: true }`**, `skipTaskbar`, `hasShadow: false`, `enableLargerThanScreen: true`, **`fullscreenable: true`** |
+
+**`fullscreenable: true`, not `false`.** Phase 0 spike 3 (`spikes/FINDINGS.md`) found that `fullscreenable: false` — set at `BrowserWindow` construction time — silently prevents the window from ever joining another app's native-fullscreen Space, regardless of `visibleOnAllWorkspaces`/`visibleOnFullScreen` settings, and calling `setFullScreenable(true)` afterward does not fix it. This is safe: the overlay is frameless with no title bar, so there's no user-facing affordance to actually fullscreen it — just never call `setFullScreen(true)` on it yourself.
 | **Settings** | Preferences | Normal window, lazy |
 
 Editor and Pin windows are deferred (§2.4) — not part of the v1.0 window inventory.
@@ -376,9 +378,9 @@ Answer these before writing production code. Each is a throwaway script, kept in
 
 1. ✅ **Done.** Does `screencapture -R` return native Retina pixels? — confirmed yes (native pixels out, points in). See `spikes/FINDINGS.md`.
 2. 🟡 **Partially done.** Do global coordinates from Electron's `screen` API map 1:1 onto `screencapture -R` on a mixed-DPI, negative-origin multi-monitor setup? Single-display origin/edges confirmed correct; the actual negative-origin/mixed-DPI/rotated matrix still needs a second physical display.
-3. Can a transparent always-on-top `screen-saver`-level BrowserWindow cover a display *including* over a fullscreen app?
-4. Measure hotkey→overlay-visible latency with a pre-warmed hidden window pool. Target < 80 ms.
-5. ~~Can you synthesize a scroll event into another app, and what permission does it actually cost?~~ Deferred along with scrolling capture (§2.4/§3.5) — skip for now.
+3. ✅ **Done.** Can a transparent always-on-top `screen-saver`-level BrowserWindow cover a display *including* over a fullscreen app? — confirmed yes, but only with `fullscreenable: true` (the spec originally said `false` — that was wrong, see §3.3 and `spikes/FINDINGS.md`). Click-through (`setIgnoreMouseEvents`) confirmed independent of this, no conflict.
+4. ⏸️ **Skipped for now.** Measure hotkey→overlay-visible latency with a pre-warmed hidden window pool. Target < 80 ms. Revisit once `overlayManager.ts` exists for real — no need to spike this in isolation first.
+5. ⏸️ **Skipped for now**, deferred along with scrolling capture (§2.4/§3.5). Can you synthesize a scroll event into another app, and what permission does it actually cost?
 
 **Gate:** if spike 1 or 2 fails, the coordinate model changes and Phase 3 must be redesigned. Do not skip.
 
