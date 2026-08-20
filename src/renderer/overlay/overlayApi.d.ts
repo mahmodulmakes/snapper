@@ -2,7 +2,8 @@ import type { RectInPoints } from '../../shared/types'
 
 export interface OverlayApi {
   dismiss: () => void
-  completeSelection: (rect: RectInPoints) => void
+  copySelection: (rect: RectInPoints) => void
+  saveSelection: (rect: RectInPoints) => void
   onReset: (callback: () => void) => void
 }
 

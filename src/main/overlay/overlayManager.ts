@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { captureRectAndOutput } from '../capture/captureService'
+import { captureRectAndCopy, captureRectAndSave } from '../capture/captureService'
 import { overlayLocalRectToGlobalPoints } from '../capture/displayManager'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
@@ -106,25 +106,33 @@ function rebuildOverlayWindowsSafely(): void {
   })
 }
 
-/**
- * A selection was finalized in one overlay window. Converts it from that
- * window's local points to global Electron points and captures it —
- * clipboard + disk, both on by default (BUILD-SPEC.md §4.4). There's no
- * floating toolbar yet (Phase 4) to offer Copy/Save/Cancel as separate
- * choices, so mouse-up captures immediately; that gap closes once the
- * toolbar exists.
- */
-function handleSelectionComplete(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
+/** Converts a selection rect from one overlay window's local points to global Electron points. */
+function toGlobalRect(event: IpcMainEvent, localRectInPoints: RectInPoints): RectInPoints | null {
   const entry = overlays.find((o) => o.window.webContents === event.sender)
   if (!entry) {
-    logger.error('Received a selection from an overlay window not in the pool.', { localRectInPoints })
-    return
+    logger.error('Received a toolbar action from an overlay window not in the pool.', { localRectInPoints })
+    return null
   }
-  const windowOriginInPoints = entry.window.getBounds()
-  const globalRectInPoints = overlayLocalRectToGlobalPoints(windowOriginInPoints, localRectInPoints)
+  return overlayLocalRectToGlobalPoints(entry.window.getBounds(), localRectInPoints)
+}
+
+/** Floating toolbar's Copy button (BUILD-SPEC.md §4.3). */
+function handleCopyAction(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
+  const globalRectInPoints = toGlobalRect(event, localRectInPoints)
+  if (!globalRectInPoints) return
   hideOverlays()
-  captureRectAndOutput(globalRectInPoints).catch((err: unknown) => {
-    logger.error('Capture from region selection failed unexpectedly.', err)
+  captureRectAndCopy(globalRectInPoints).catch((err: unknown) => {
+    logger.error('Copy from region selection failed unexpectedly.', err)
+  })
+}
+
+/** Floating toolbar's Save button (BUILD-SPEC.md §4.3). */
+function handleSaveAction(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
+  const globalRectInPoints = toGlobalRect(event, localRectInPoints)
+  if (!globalRectInPoints) return
+  hideOverlays()
+  captureRectAndSave(globalRectInPoints).catch((err: unknown) => {
+    logger.error('Save from region selection failed unexpectedly.', err)
   })
 }
 
@@ -141,7 +149,8 @@ export function initOverlayWindows(): void {
     screen.on('display-removed', rebuildOverlayWindowsSafely)
     screen.on('display-metrics-changed', rebuildOverlayWindowsSafely)
     ipcMain.on(IPC.OVERLAY_DISMISS, () => hideOverlays())
-    ipcMain.on(IPC.OVERLAY_SELECTION_COMPLETE, handleSelectionComplete)
+    ipcMain.on(IPC.OVERLAY_ACTION_COPY, handleCopyAction)
+    ipcMain.on(IPC.OVERLAY_ACTION_SAVE, handleSaveAction)
     listenersRegistered = true
   }
 }
@@ -151,7 +160,8 @@ export function teardownOverlayWindows(): void {
   screen.removeListener('display-removed', rebuildOverlayWindowsSafely)
   screen.removeListener('display-metrics-changed', rebuildOverlayWindowsSafely)
   ipcMain.removeAllListeners(IPC.OVERLAY_DISMISS)
-  ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_COMPLETE)
+  ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_COPY)
+  ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_SAVE)
   listenersRegistered = false
   destroyOverlayWindows()
 }

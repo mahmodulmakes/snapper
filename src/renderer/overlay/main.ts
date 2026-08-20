@@ -1,5 +1,5 @@
 // Magnifier loupe and window-under-cursor detection are not built yet —
-// everything else from BUILD-SPEC.md §4.2's region capture flow lives here.
+// everything else from BUILD-SPEC.md §4.2/§4.3's region capture flow lives here.
 import {
   clampRectToBounds,
   computeDragRect,
@@ -10,6 +10,7 @@ import {
 
 const canvas = document.getElementById('overlay-canvas')
 const ctx = canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : null
+const toolbar = document.getElementById('toolbar')
 
 let anchor: Point | null = null
 let lastMouse: Point | null = null
@@ -81,12 +82,43 @@ function currentModifiers(): { square: boolean; fromCenter: boolean } {
   return { square: mods.shift, fromCenter: mods.option }
 }
 
+/**
+ * Anchored below the selection, flipped above if it'd go offscreen, clamped
+ * to display bounds (BUILD-SPEC.md §4.3). Lives inside the overlay window
+ * itself — inherits always-on-top for free, no separate window needed.
+ */
+function positionToolbar(rect: Rect): void {
+  if (!toolbar) return
+  toolbar.classList.add('visible')
+
+  const toolbarWidth = toolbar.offsetWidth
+  const toolbarHeight = toolbar.offsetHeight
+  const gap = 8
+  const { width: boundsWidth, height: boundsHeight } = bounds()
+
+  let left = rect.x + rect.width / 2 - toolbarWidth / 2
+  let top = rect.y + rect.height + gap
+  if (top + toolbarHeight > boundsHeight) {
+    top = rect.y - toolbarHeight - gap
+  }
+  top = Math.min(Math.max(top, 0), Math.max(0, boundsHeight - toolbarHeight))
+  left = Math.min(Math.max(left, 0), Math.max(0, boundsWidth - toolbarWidth))
+
+  toolbar.style.left = `${left}px`
+  toolbar.style.top = `${top}px`
+}
+
+function hideToolbar(): void {
+  toolbar?.classList.remove('visible')
+}
+
 function resetSelectionState(): void {
   dragging = false
   anchor = null
   lastMouse = null
   liveRect = null
   selection = null
+  hideToolbar()
   render()
 }
 
@@ -96,6 +128,7 @@ function onMouseDown(event: MouseEvent): void {
   lastMouse = point
   dragging = true
   selection = null
+  hideToolbar()
   liveRect = computeDragRect(anchor, point, currentModifiers())
   render()
 }
@@ -121,7 +154,9 @@ function onMouseUp(): void {
   dragging = false
   if (liveRect && liveRect.width >= 2 && liveRect.height >= 2) {
     selection = liveRect
-    window.overlayApi.completeSelection(selection)
+    positionToolbar(selection)
+  } else {
+    hideToolbar()
   }
   liveRect = null
   anchor = null
@@ -129,9 +164,46 @@ function onMouseUp(): void {
   render()
 }
 
+function triggerCopy(): void {
+  if (!selection) return
+  hideToolbar()
+  window.overlayApi.copySelection(selection)
+}
+
+function triggerSave(): void {
+  if (!selection) return
+  hideToolbar()
+  window.overlayApi.saveSelection(selection)
+}
+
+function triggerRedo(): void {
+  hideToolbar()
+  selection = null
+  liveRect = null
+  render()
+}
+
+function triggerCancel(): void {
+  // Reset local state immediately rather than relying solely on the next
+  // OVERLAY_RESET (which only fires right before the window is shown again)
+  // — the window is about to hide either way, but leaving stale toolbar/
+  // selection state hanging around between now and then is a needless trap.
+  hideToolbar()
+  selection = null
+  liveRect = null
+  window.overlayApi.dismiss()
+}
+
 function onKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
-    window.overlayApi.dismiss()
+    triggerCancel()
+    return
+  }
+  if (event.key === 'Enter' && selection && !dragging) {
+    // Default action on Enter is a setting (most users: Copy) — hardcoded
+    // until the Settings window (Phase 5) can configure it.
+    event.preventDefault()
+    triggerCopy()
     return
   }
   if (event.key === 'Shift') mods.shift = true
@@ -152,7 +224,7 @@ function onKeyDown(event: KeyboardEvent): void {
 
     if (dx !== 0 || dy !== 0) {
       selection = clampRectToBounds(nudgeRect(selection, dx, dy), bounds())
-      window.overlayApi.completeSelection(selection)
+      positionToolbar(selection)
       render()
       event.preventDefault()
     }
@@ -173,5 +245,11 @@ if (canvas instanceof HTMLCanvasElement) {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   window.overlayApi.onReset(resetSelectionState)
+
+  document.getElementById('toolbar-copy')?.addEventListener('click', triggerCopy)
+  document.getElementById('toolbar-save')?.addEventListener('click', triggerSave)
+  document.getElementById('toolbar-redo')?.addEventListener('click', triggerRedo)
+  document.getElementById('toolbar-cancel')?.addEventListener('click', triggerCancel)
+
   resizeCanvas()
 }

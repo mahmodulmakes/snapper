@@ -10,10 +10,55 @@
     <style>
       html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
       canvas { display: block; cursor: crosshair; }
+
+      #toolbar {
+        position: fixed;
+        display: none;
+        gap: 4px;
+        padding: 6px;
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        -webkit-user-select: none;
+      }
+      #toolbar.visible {
+        display: flex;
+      }
+      #toolbar button {
+        appearance: none;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: #f2f2f2;
+        font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      #toolbar button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      #toolbar button#toolbar-copy {
+        background: #3b82f6;
+        color: #fff;
+        font-weight: 600;
+      }
+      #toolbar button#toolbar-copy:hover {
+        background: #2f6fd6;
+      }
+      #toolbar button#toolbar-cancel {
+        color: #f87171;
+      }
     </style>
   </head>
   <body>
     <canvas id="overlay-canvas"></canvas>
+    <div id="toolbar">
+      <button id="toolbar-copy" type="button">Copy</button>
+      <button id="toolbar-save" type="button">Save</button>
+      <button id="toolbar-redo" type="button">Redo Selection</button>
+      <button id="toolbar-cancel" type="button">Cancel</button>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
