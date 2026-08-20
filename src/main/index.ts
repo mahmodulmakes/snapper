@@ -2,13 +2,28 @@ import { app, screen, shell } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import { captureRectAndOutput } from './capture/captureService'
 import { defaultSaveDirectory } from './output/fileWriter'
+import { initOnboarding, showOnboardingWindow, teardownOnboarding } from './permissions/onboardingWindow'
+import { isScreenRecordingGranted } from './permissions/screenRecording'
 import { createTray, destroyTray } from './tray/trayManager'
 import { initOverlayWindows, showOverlays, teardownOverlayWindows } from './overlay/overlayManager'
 import { logger } from './logger'
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
+/** Gate for any action that needs Screen Recording access — steers to onboarding instead of a doomed capture. */
+function requireScreenRecording(): boolean {
+  if (isScreenRecordingGranted()) return true
+  showOnboardingWindow()
+  return false
+}
+
+function captureArea(): void {
+  if (!requireScreenRecording()) return
+  showOverlays()
+}
+
 function captureFullScreen(): void {
+  if (!requireScreenRecording()) return
   const { bounds } = screen.getPrimaryDisplay()
   captureRectAndOutput({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }).catch(
     (err: unknown) => {
@@ -44,11 +59,15 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(() => {
     createTray({
-      onCaptureArea: showOverlays,
+      onCaptureArea: captureArea,
       onCaptureFullScreen: captureFullScreen,
       onOpenSaveFolder: openSaveFolder
     })
     initOverlayWindows()
+    initOnboarding()
+    if (!isScreenRecordingGranted()) {
+      showOnboardingWindow()
+    }
     logger.info('App ready; tray created, overlay window pool pre-warmed.')
   })
 
@@ -59,5 +78,6 @@ if (!gotSingleInstanceLock) {
   app.on('before-quit', () => {
     destroyTray()
     teardownOverlayWindows()
+    teardownOnboarding()
   })
 }

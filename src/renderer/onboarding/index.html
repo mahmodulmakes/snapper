@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Screen Recording Access Needed</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #1e1e1e;
+        color: #f2f2f2;
+        font: 14px -apple-system, BlinkMacSystemFont, sans-serif;
+        -webkit-user-select: none;
+      }
+      body {
+        padding: 28px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0 0 12px;
+      }
+      p {
+        line-height: 1.5;
+        color: #c9c9c9;
+        margin: 0 0 16px;
+      }
+      ol {
+        line-height: 1.7;
+        color: #c9c9c9;
+        margin: 0 0 20px;
+        padding-left: 20px;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        flex: 1;
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #open-settings {
+        background: #3b82f6;
+        color: #fff;
+      }
+      #restart {
+        background: #3a3a3a;
+        color: #f2f2f2;
+      }
+      .privacy-note {
+        font-size: 12px;
+        color: #888;
+        margin-top: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Screen Recording Access Needed</h1>
+    <p>Screenshot needs Screen Recording access to capture your screen. This is a macOS privacy requirement.</p>
+    <ol>
+      <li>Click <strong>Open System Settings</strong> below.</li>
+      <li>Turn on the toggle for <strong>Screenshot</strong> in the list.</li>
+      <li>Come back here and click <strong>Restart App</strong>.</li>
+    </ol>
+    <p class="privacy-note">
+      Nothing captured ever leaves your Mac — this permission only lets the app read your screen's pixels locally.
+    </p>
+    <div class="spacer"></div>
+    <div class="buttons">
+      <button id="open-settings">Open System Settings</button>
+      <button id="restart">Restart App</button>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
