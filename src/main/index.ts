@@ -76,12 +76,24 @@ function currentTrayState(): TrayMenuState {
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
+  // A menu-bar app has no Dock icon or window to focus, so a user who
+  // double-clicks Snapper again while it's already running (not realizing
+  // that, or just wanting to get to it) would otherwise see literally
+  // nothing happen. Show Settings as the concrete "yes, I'm running" signal.
+  //
+  // Both events, deliberately: Electron's docs describe macOS as enforcing
+  // single-instance for a Finder/Launchpad re-launch through its OWN native
+  // mechanism (distinct from second-instance, which is oriented at
+  // command-line re-invocation) — unclear from the docs alone which one
+  // actually fires for a GUI double-click on an app with no Dock icon, so
+  // both are handled rather than guessing. Harmless if both fire for the
+  // same click — showSettingsWindow() just focuses the existing window.
   app.on('second-instance', () => {
-    // A menu-bar app has no Dock icon or window to focus, so a user who
-    // double-clicks Snapper again while it's already running (not realizing
-    // that, or just wanting to get to it) would otherwise see literally
-    // nothing happen. Show Settings as the concrete "yes, I'm running" signal.
-    logger.info('Second launch attempt while already running; showing Settings.')
+    logger.info('Second launch attempt while already running (second-instance); showing Settings.')
+    showSettingsWindow()
+  })
+  app.on('activate', () => {
+    logger.info('App activated while already running (activate); showing Settings.')
     showSettingsWindow()
   })
 
