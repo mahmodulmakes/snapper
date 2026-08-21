@@ -1,6 +1,6 @@
 import { ipcMain, shell } from 'electron'
 import { IPC } from '../ipc/channels'
-import { logger } from '../logger'
+import { notifyFailure } from '../notify'
 import { setLaunchAtLogin } from './launchAtLogin'
 import { getSettingsStore } from './store'
 import { setShortcutsPaused, trySetShortcut } from '../shortcuts/shortcutManager'
@@ -39,7 +39,11 @@ export function initSettingsIpc(): void {
     // the user at Apple's own Keyboard Shortcuts pane to disable ⌘⇧3/4/5
     // themselves — this app has no API to do that for them.
     shell.openExternal('x-apple.systempreferences:com.apple.preference.keyboard?Shortcuts').catch((err: unknown) => {
-      logger.error('Could not open Keyboard Shortcuts settings.', err)
+      notifyFailure(
+        "Couldn't open System Settings",
+        'Open System Settings → Keyboard → Shortcuts manually to disable ⌘⇧3/4/5.',
+        err
+      )
     })
   })
 

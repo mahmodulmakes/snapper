@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
+import { notifyFailure } from '../notify'
 import { openScreenRecordingPrivacySettings } from './screenRecording'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -29,7 +30,13 @@ export function initOnboarding(): void {
   if (listenersRegistered) return
   ipcMain.on(IPC.ONBOARDING_OPEN_SETTINGS, () => {
     openScreenRecordingPrivacySettings().catch((err: unknown) => {
-      logger.error('Could not open Screen Recording privacy settings.', err)
+      // CLAUDE.md: never let a failure be silent — the user clicked a button
+      // and needs to know it didn't work, not just find it in a log.
+      notifyFailure(
+        "Couldn't open System Settings",
+        'Open System Settings → Privacy & Security → Screen Recording manually to grant access.',
+        err
+      )
     })
   })
   ipcMain.on(IPC.ONBOARDING_RESTART, restartApp)
