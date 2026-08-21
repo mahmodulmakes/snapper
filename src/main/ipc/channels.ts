@@ -10,6 +10,7 @@ export const IPC = {
   OVERLAY_SELECTION_STATE: 'overlay:selection-state',
   OVERLAY_SELECTION_NUDGE: 'overlay:selection-nudge',
   OVERLAY_SELECTION_REDO: 'overlay:selection-redo',
+  OVERLAY_GET_CAPTURE_SOURCE_ID: 'overlay:get-capture-source-id',
   ONBOARDING_OPEN_SETTINGS: 'onboarding:open-settings',
   ONBOARDING_RESTART: 'onboarding:restart',
   SETTINGS_GET_STATE: 'settings:get-state',

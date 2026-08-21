@@ -1,5 +1,11 @@
 import { screen, type BrowserWindow, type IpcMainEvent } from 'electron'
-import { clampRectToVirtualDesktop, globalRectToOverlayLocalPoints, overlayLocalPointToGlobalPoint, type DisplayInfo } from '../capture/displayManager'
+import {
+  clampRectToVirtualDesktop,
+  globalRectToOverlayLocalPoints,
+  originForDisplayId,
+  overlayLocalPointToGlobalPoint,
+  type DisplayInfo
+} from '../capture/displayManager'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
 import { computeDragRect, nudgeRect, rectIntersection, type Point, type Rect } from '../../shared/selectionMath'
@@ -50,14 +56,17 @@ function containsPoint(bounds: Rect, point: Point): boolean {
 }
 
 /** Which window should host the toolbar for a (possibly cross-display) finalized rect: whichever display contains its bottom-right corner, or failing that, whichever it overlaps most. */
-function determineToolbarHostDisplayId(overlays: OverlayEntry[], globalRect: Rect): number | null {
+function determineToolbarHostDisplayId(overlays: OverlayEntry[], displays: DisplayInfo[], globalRect: Rect): number | null {
   const bottomRight: Point = { x: globalRect.x + globalRect.width, y: globalRect.y + globalRect.height }
-  const containing = overlays.find((entry) => containsPoint(entry.window.getBounds(), bottomRight))
-  if (containing) return containing.displayId
+  const displayIdsInPool = new Set(overlays.map((entry) => entry.displayId))
+  const containing = displays.find((display) => displayIdsInPool.has(display.id) && containsPoint(display.boundsInPoints, bottomRight))
+  if (containing) return containing.id
 
   let best: { displayId: number; area: number } | null = null
   for (const entry of overlays) {
-    const intersection = rectIntersection(globalRect, entry.window.getBounds())
+    const display = displays.find((d) => d.id === entry.displayId)
+    if (!display) continue
+    const intersection = rectIntersection(globalRect, display.boundsInPoints)
     if (!intersection) continue
     const area = intersection.width * intersection.height
     if (!best || area > best.area) best = { displayId: entry.displayId, area }
@@ -68,14 +77,17 @@ function determineToolbarHostDisplayId(overlays: OverlayEntry[], globalRect: Rec
 /** Sends every overlay window its own local slice of the (possibly cross-display) selection rect. A window untouched by the rect just gets an off-canvas rect, which draws nothing extra — no special-casing needed. */
 function broadcastSelectionState(
   overlays: OverlayEntry[],
+  displays: DisplayInfo[],
   phase: 'dragging' | 'finalized',
   globalRect: Rect | null,
   hostDisplayId: number | null
 ): void {
   for (const entry of overlays) {
-    const localRect = globalRect
-      ? globalRectToOverlayLocalPoints(entry.window.getBounds(), globalRect)
-      : { x: 0, y: 0, width: 0, height: 0 }
+    const origin = globalRect ? originForDisplayId(entry.displayId, displays) : null
+    // No matching display (e.g. disconnected mid-drag) — same as "rect
+    // doesn't touch this window": send the off-canvas rect rather than
+    // guessing at a position with a stale/unreliable origin.
+    const localRect = globalRect && origin ? globalRectToOverlayLocalPoints(origin, globalRect) : { x: 0, y: 0, width: 0, height: 0 }
     const payload: OverlaySelectionStatePayload = {
       phase,
       rectInPoints: localRect,
@@ -93,7 +105,7 @@ function broadcastSelectionState(
  * deltas), and returns the resulting rect. Only valid while dragState is set
  * (tickDrag/handleDragEnd both guard).
  */
-function advanceDragTick(): Rect {
+function advanceDragTick(displays: DisplayInfo[]): Rect {
   const state = dragState as DragState
   const cursor = screen.getCursorScreenPoint()
   if (state.modifiers.space) {
@@ -103,21 +115,23 @@ function advanceDragTick(): Rect {
     }
   }
   state.lastCursorInPoints = cursor
-  return clampRectToVirtualDesktop(computeDragRect(state.anchorInPoints, cursor, state.modifiers), currentDisplayInfos())
+  return clampRectToVirtualDesktop(computeDragRect(state.anchorInPoints, cursor, state.modifiers), displays)
 }
 
 function tickDrag(overlays: OverlayEntry[]): void {
   if (!dragState) return
-  broadcastSelectionState(overlays, 'dragging', advanceDragTick(), null)
+  const displays = currentDisplayInfos()
+  broadcastSelectionState(overlays, displays, 'dragging', advanceDragTick(displays), null)
 }
 
 function finalizeSelection(overlays: OverlayEntry[], globalRect: Rect | null): void {
+  const displays = currentDisplayInfos()
   if (globalRect && globalRect.width >= 2 && globalRect.height >= 2) {
     finalizedRectInPoints = globalRect
-    broadcastSelectionState(overlays, 'finalized', globalRect, determineToolbarHostDisplayId(overlays, globalRect))
+    broadcastSelectionState(overlays, displays, 'finalized', globalRect, determineToolbarHostDisplayId(overlays, displays, globalRect))
   } else {
     finalizedRectInPoints = null
-    broadcastSelectionState(overlays, 'finalized', null, null)
+    broadcastSelectionState(overlays, displays, 'finalized', null, null)
   }
 }
 
@@ -135,9 +149,14 @@ export function handleDragStart(overlays: OverlayEntry[], event: IpcMainEvent, p
     logger.error('Received a drag-start from an overlay window not in the pool.')
     return
   }
+  const origin = originForDisplayId(entry.displayId, currentDisplayInfos())
+  if (!origin) {
+    logger.error(`No display found for overlay window's displayId ${entry.displayId}; cannot start a drag without a known origin.`)
+    return
+  }
   if (dragState) clearInterval(dragState.pollTimer)
   finalizedRectInPoints = null
-  const anchorInPoints = overlayLocalPointToGlobalPoint(entry.window.getBounds(), payload.anchorInPoints)
+  const anchorInPoints = overlayLocalPointToGlobalPoint(origin, payload.anchorInPoints)
   dragState = {
     anchorInPoints,
     modifiers: payload.modifiers,
@@ -157,7 +176,7 @@ export function handleDragModifiers(overlays: OverlayEntry[], payload: OverlayDr
 /** Overlay renderer's mouseup — stops polling and broadcasts the finalized rect + which window hosts the toolbar. */
 export function handleDragEnd(overlays: OverlayEntry[]): void {
   if (!dragState) return
-  const rect = advanceDragTick()
+  const rect = advanceDragTick(currentDisplayInfos())
   clearInterval(dragState.pollTimer)
   dragState = null
   finalizeSelection(overlays, rect)
@@ -172,5 +191,5 @@ export function handleSelectionNudge(overlays: OverlayEntry[], payload: OverlayS
 /** "Redo Selection" toolbar button — clears the finalized rect on every window, not just the host. */
 export function handleSelectionRedo(overlays: OverlayEntry[]): void {
   finalizedRectInPoints = null
-  broadcastSelectionState(overlays, 'finalized', null, null)
+  broadcastSelectionState(overlays, currentDisplayInfos(), 'finalized', null, null)
 }

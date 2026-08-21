@@ -11,6 +11,7 @@ export interface OverlayApi {
   onSelectionState: (callback: (payload: OverlaySelectionStatePayload) => void) => void
   nudgeSelection: (dx: number, dy: number) => void
   redoSelection: () => void
+  getCaptureSourceId: () => Promise<string | null>
 }
 
 declare global {

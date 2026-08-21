@@ -12,6 +12,7 @@ import { initShortcuts, onShortcutStateChange, setShortcutsPaused, teardownShort
 import { createTray, destroyTray, updateTrayMenu } from './tray/trayManager'
 import { initOverlayWindows, showOverlays, teardownOverlayWindows } from './overlay/overlayManager'
 import { logger } from './logger'
+import { notifyFailure } from './notify'
 import type { TrayMenuHandlers, TrayMenuState } from './tray/menuBuilder'
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -25,12 +26,17 @@ function requireScreenRecording(): boolean {
 
 function captureArea(): void {
   if (!requireScreenRecording()) return
-  showOverlays()
+  showOverlays().catch((err: unknown) => {
+    logger.error('Could not show the capture overlay.', err)
+  })
 }
 
 function captureFullScreen(): void {
   if (!requireScreenRecording()) return
-  const { bounds } = screen.getPrimaryDisplay()
+  // Capture whichever display the pointer is on, not always the primary
+  // (CleanShot X/Shottr convention) — multi-monitor users expect ⌃⇧3 to
+  // follow the cursor.
+  const { bounds } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   captureRectAndOutput({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }).catch(
     (err: unknown) => {
       logger.error('Full-screen capture failed unexpectedly.', err)
@@ -43,10 +49,10 @@ function openSaveFolder(): void {
   mkdir(dir, { recursive: true })
     .then(() => shell.openPath(dir))
     .then((err) => {
-      if (err) logger.error(`Could not open save folder: ${err}`)
+      if (err) notifyFailure("Couldn't open Screenshots folder", `Could not open save folder: ${err}`)
     })
     .catch((err: unknown) => {
-      logger.error('Could not open save folder.', err)
+      notifyFailure("Couldn't open Screenshots folder", `Could not open save folder: ${String(err)}`)
     })
 }
 

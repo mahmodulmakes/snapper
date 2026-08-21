@@ -1,4 +1,4 @@
-import { app, Notification, screen } from 'electron'
+import { app, screen } from 'electron'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { playCaptureSound } from './captureSound'
@@ -8,6 +8,7 @@ import { stitchSegments } from './stitcher'
 import { copyImageFileToClipboard } from '../output/clipboard'
 import { saveScreenshotFile } from '../output/fileWriter'
 import { logger } from '../logger'
+import { notifyFailure as notifyFailureBase } from '../notify'
 import type { RectInPoints } from '../../shared/types'
 
 function currentDisplayInfos(): DisplayInfo[] {
@@ -28,12 +29,7 @@ interface TempCapture {
 }
 
 function notifyFailure(message: string): void {
-  logger.error(message)
-  // CLAUDE.md: never let a failure be silent. Guarded because Notification
-  // support depends on OS/user settings, not just platform.
-  if (Notification.isSupported()) {
-    new Notification({ title: 'Screenshot failed', body: message }).show()
-  }
+  notifyFailureBase('Screenshot failed', message)
 }
 
 /**

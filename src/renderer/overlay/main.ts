@@ -1,9 +1,10 @@
-// Magnifier loupe and window-under-cursor detection are not built yet —
-// everything else from BUILD-SPEC.md §4.2/§4.3's region capture flow lives
-// here. Drag-rect *computation* lives in the main process
-// (main/overlay/dragCoordinator.ts) so a drag crossing a display boundary
-// stays correct — this file only reflects whatever main broadcasts and
-// forwards raw input (mousedown/up, modifier keys) back to it.
+// Window-under-cursor detection is not built yet — everything else from
+// BUILD-SPEC.md §4.2/§4.3's region capture flow lives here. Drag-rect
+// *computation* lives in the main process (main/overlay/dragCoordinator.ts)
+// so a drag crossing a display boundary stays correct — this file only
+// reflects whatever main broadcasts and forwards raw input (mousedown/up,
+// modifier keys) back to it.
+import { hideLoupe, startMagnifier, stopMagnifier, updateMagnifier } from './magnifier'
 import type { OverlaySelectionStatePayload, PointInPoints, RectInPoints } from '../../shared/types'
 
 const canvas = document.getElementById('overlay-canvas')
@@ -119,6 +120,13 @@ function resetSelectionState(): void {
   isToolbarHost = false
   hideToolbar()
   render()
+  startMagnifier()
+}
+
+/** Magnifier loupe (BUILD-SPEC.md §4.2 step 3) — idle only, see magnifier.ts's header comment. */
+function onIdleMouseMove(event: MouseEvent): void {
+  if (dragging || selection) return
+  updateMagnifier(event.clientX, event.clientY)
 }
 
 function onMouseDown(event: MouseEvent): void {
@@ -127,6 +135,7 @@ function onMouseDown(event: MouseEvent): void {
   selection = null
   isToolbarHost = false
   hideToolbar()
+  hideLoupe()
   window.overlayApi.startDrag(anchorInPoints, currentModifiers())
 }
 
@@ -142,6 +151,7 @@ function onSelectionState(payload: OverlaySelectionStatePayload): void {
     selection = null
     isToolbarHost = false
     hideToolbar()
+    hideLoupe()
     render()
     return
   }
@@ -156,6 +166,7 @@ function onSelectionState(payload: OverlaySelectionStatePayload): void {
   }
 
   selection = payload.rectInPoints
+  hideLoupe()
   if (isToolbarHost) {
     positionToolbar(selection)
   } else {
@@ -240,12 +251,21 @@ function onKeyUp(event: KeyboardEvent): void {
   }
 }
 
+function onVisibilityChange(): void {
+  // Covers every path that hides this window (cancel, copy, save) uniformly
+  // — those don't all route through a dedicated "you're being hidden" IPC
+  // message, but the Page Visibility API reflects it regardless of cause.
+  if (document.hidden) stopMagnifier()
+}
+
 if (canvas instanceof HTMLCanvasElement) {
   window.addEventListener('resize', resizeCanvas)
   canvas.addEventListener('mousedown', onMouseDown)
+  window.addEventListener('mousemove', onIdleMouseMove)
   window.addEventListener('mouseup', onMouseUp)
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   window.overlayApi.onReset(resetSelectionState)
   window.overlayApi.onSelectionState(onSelectionState)
 

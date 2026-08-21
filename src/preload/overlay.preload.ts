@@ -28,5 +28,6 @@ contextBridge.exposeInMainWorld('overlayApi', {
   nudgeSelection: (dx: number, dy: number): void => {
     ipcRenderer.send(IPC.OVERLAY_SELECTION_NUDGE, { dx, dy })
   },
-  redoSelection: (): void => ipcRenderer.send(IPC.OVERLAY_SELECTION_REDO)
+  redoSelection: (): void => ipcRenderer.send(IPC.OVERLAY_SELECTION_REDO),
+  getCaptureSourceId: (): Promise<string | null> => ipcRenderer.invoke(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID)
 })

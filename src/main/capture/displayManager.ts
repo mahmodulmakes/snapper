@@ -97,6 +97,20 @@ export interface DisplayInfo {
   scaleFactor: number
 }
 
+/**
+ * The origin (top-left, in global points) of the display with the given id,
+ * from the verified ground truth `screen.getAllDisplays()` — never a
+ * BrowserWindow's own `getBounds()` (Phase 0 spike 2 found it can misreport
+ * by the menu bar's height; it's also unsafe to call on a window that may
+ * have been destroyed by a concurrent display-change rebuild). Returns null
+ * when the display no longer exists (e.g. disconnected mid-drag) — callers
+ * should treat that overlay entry as unavailable, not guess at its position.
+ */
+export function originForDisplayId(displayId: number, displays: DisplayInfo[]): PointInPoints | null {
+  const display = displays.find((d) => d.id === displayId)
+  return display ? { x: display.boundsInPoints.x, y: display.boundsInPoints.y } : null
+}
+
 export interface CaptureSegmentPlan {
   displayId: number
   /** The portion of the selection on this display, in global points — pass straight to `-R`. */

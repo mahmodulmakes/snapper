@@ -1,8 +1,10 @@
-import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent } from 'electron'
+import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { captureRectAndCopy, captureRectAndSave } from '../capture/captureService'
-import { overlayLocalRectToGlobalPoints } from '../capture/displayManager'
+import { getDesktopCaptureSourceId } from '../capture/desktopCaptureSource'
+import { originForDisplayId, overlayLocalRectToGlobalPoints } from '../capture/displayManager'
+import { activateApp, getFrontmostAppBundleId } from '../capture/frontmostApp'
 import {
   handleDragEnd,
   handleDragModifiers,
@@ -93,6 +95,12 @@ function destroyOverlayWindows(): void {
 }
 
 async function rebuildOverlayWindows(): Promise<void> {
+  // A display topology change invalidates any in-flight drag's polling loop
+  // (it closes over the pre-rebuild `overlays` array — see dragCoordinator.ts)
+  // and the coordinates it was tracking. Cancel it before destroying windows,
+  // rather than letting the poll timer keep ticking against now-destroyed
+  // BrowserWindows.
+  resetDragState()
   destroyOverlayWindows()
   const displays = screen.getAllDisplays()
   const windows = await Promise.all(displays.map((display) => createOverlayWindow(display)))
@@ -110,14 +118,29 @@ function rebuildOverlayWindowsSafely(): void {
   })
 }
 
-/** Converts a selection rect from one overlay window's local points to global Electron points. */
+/**
+ * Converts a selection rect from one overlay window's local points to global
+ * Electron points, using the window's DISPLAY bounds (from
+ * `screen.getAllDisplays()`) as the origin — NOT `window.getBounds()`.
+ * Confirmed via a ground-truth screencapture marker test (spikes/): on the
+ * display hosting the menu bar, `getBounds()` misreports the window's
+ * origin by the menu bar's height, even though its content genuinely
+ * renders at the display's real origin. `screen.getAllDisplays()` is the
+ * verified ground truth (Phase 0 spike 2).
+ */
 function toGlobalRect(event: IpcMainEvent, localRectInPoints: RectInPoints): RectInPoints | null {
   const entry = overlays.find((o) => o.window.webContents === event.sender)
   if (!entry) {
     logger.error('Received a toolbar action from an overlay window not in the pool.', { localRectInPoints })
     return null
   }
-  return overlayLocalRectToGlobalPoints(entry.window.getBounds(), localRectInPoints)
+  const displays = screen.getAllDisplays().map((d) => ({ id: d.id, boundsInPoints: d.bounds, scaleFactor: d.scaleFactor }))
+  const origin = originForDisplayId(entry.displayId, displays)
+  if (!origin) {
+    logger.error(`No display found for overlay window's displayId ${entry.displayId}; dropping this action.`)
+    return null
+  }
+  return overlayLocalRectToGlobalPoints(origin, localRectInPoints)
 }
 
 /** Floating toolbar's Copy button (BUILD-SPEC.md §4.3). */
@@ -140,6 +163,13 @@ function handleSaveAction(event: IpcMainEvent, localRectInPoints: RectInPoints):
   })
 }
 
+/** Magnifier loupe (BUILD-SPEC.md §4.2 step 3): resolves the sender's own display's desktopCapturer source id. */
+async function handleGetCaptureSourceId(event: IpcMainInvokeEvent): Promise<string | null> {
+  const entry = overlays.find((o) => o.window.webContents === event.sender)
+  if (!entry) return null
+  return getDesktopCaptureSourceId(entry.displayId)
+}
+
 /**
  * Pre-warms one hidden overlay window per display and keeps the pool in sync
  * with display changes. Call once at app startup (BUILD-SPEC.md §3.3 —
@@ -160,6 +190,7 @@ export function initOverlayWindows(): void {
     ipcMain.on(IPC.OVERLAY_DRAG_END, () => handleDragEnd(overlays))
     ipcMain.on(IPC.OVERLAY_SELECTION_NUDGE, (_event, payload) => handleSelectionNudge(overlays, payload))
     ipcMain.on(IPC.OVERLAY_SELECTION_REDO, () => handleSelectionRedo(overlays))
+    ipcMain.handle(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID, handleGetCaptureSourceId)
     listenersRegistered = true
   }
 }
@@ -176,13 +207,32 @@ export function teardownOverlayWindows(): void {
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_END)
   ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_NUDGE)
   ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_REDO)
+  ipcMain.removeHandler(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID)
   listenersRegistered = false
   resetDragState()
   destroyOverlayWindows()
 }
 
-/** Shows every display's overlay simultaneously (BUILD-SPEC.md §4.2 step 2). */
-export function showOverlays(): void {
+let frontmostAppBundleIdAtHotkey: string | null = null
+let overlaysActive = false
+
+/**
+ * Shows every display's overlay simultaneously (BUILD-SPEC.md §4.2 steps 1
+ * & 2). Recording the frontmost app MUST happen before any `focus()` call
+ * below — once an overlay window is focused, the frontmost app IS this app,
+ * and the original app is unrecoverable.
+ *
+ * Guarded against re-entrancy: the frontmost-app lookup is awaited before
+ * focus() is called, so a second call arriving while the first is still
+ * in-flight (rapid double-press, or hotkey + tray click) would otherwise see
+ * this app's own overlay as "frontmost" and clobber the real one.
+ */
+export async function showOverlays(): Promise<void> {
+  if (overlaysActive) return
+  overlaysActive = true
+
+  frontmostAppBundleIdAtHotkey = await getFrontmostAppBundleId()
+
   for (const entry of overlays) {
     // Clear any selection left over from the previous capture before the
     // window becomes visible again — these windows are hidden, not
@@ -193,9 +243,18 @@ export function showOverlays(): void {
   }
 }
 
+/** Hides every overlay and restores focus to whatever app was frontmost when the hotkey fired (BUILD-SPEC.md §4.2 step 7). */
 export function hideOverlays(): void {
+  overlaysActive = false
   resetDragState()
   for (const entry of overlays) {
     entry.window.hide()
+  }
+  const bundleId = frontmostAppBundleIdAtHotkey
+  frontmostAppBundleIdAtHotkey = null
+  if (bundleId) {
+    activateApp(bundleId).catch((err: unknown) => {
+      logger.error('Could not restore focus after hiding overlays.', err)
+    })
   }
 }
