@@ -3,16 +3,20 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { captureRectAndCopy, captureRectAndSave } from '../capture/captureService'
 import { overlayLocalRectToGlobalPoints } from '../capture/displayManager'
+import {
+  handleDragEnd,
+  handleDragModifiers,
+  handleDragStart,
+  handleSelectionNudge,
+  handleSelectionRedo,
+  resetDragState,
+  type OverlayEntry
+} from './dragCoordinator'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
 import type { RectInPoints } from '../../shared/types'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-
-interface OverlayEntry {
-  displayId: number
-  window: BrowserWindow
-}
 
 let overlays: OverlayEntry[] = []
 let listenersRegistered = false
@@ -151,6 +155,11 @@ export function initOverlayWindows(): void {
     ipcMain.on(IPC.OVERLAY_DISMISS, () => hideOverlays())
     ipcMain.on(IPC.OVERLAY_ACTION_COPY, handleCopyAction)
     ipcMain.on(IPC.OVERLAY_ACTION_SAVE, handleSaveAction)
+    ipcMain.on(IPC.OVERLAY_DRAG_START, (event, payload) => handleDragStart(overlays, event, payload))
+    ipcMain.on(IPC.OVERLAY_DRAG_MODIFIERS, (_event, payload) => handleDragModifiers(overlays, payload))
+    ipcMain.on(IPC.OVERLAY_DRAG_END, () => handleDragEnd(overlays))
+    ipcMain.on(IPC.OVERLAY_SELECTION_NUDGE, (_event, payload) => handleSelectionNudge(overlays, payload))
+    ipcMain.on(IPC.OVERLAY_SELECTION_REDO, () => handleSelectionRedo(overlays))
     listenersRegistered = true
   }
 }
@@ -162,7 +171,13 @@ export function teardownOverlayWindows(): void {
   ipcMain.removeAllListeners(IPC.OVERLAY_DISMISS)
   ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_COPY)
   ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_SAVE)
+  ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_START)
+  ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_MODIFIERS)
+  ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_END)
+  ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_NUDGE)
+  ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_REDO)
   listenersRegistered = false
+  resetDragState()
   destroyOverlayWindows()
 }
 
@@ -179,6 +194,7 @@ export function showOverlays(): void {
 }
 
 export function hideOverlays(): void {
+  resetDragState()
   for (const entry of overlays) {
     entry.window.hide()
   }

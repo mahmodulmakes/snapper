@@ -1,22 +1,19 @@
 // Magnifier loupe and window-under-cursor detection are not built yet —
-// everything else from BUILD-SPEC.md §4.2/§4.3's region capture flow lives here.
-import {
-  clampRectToBounds,
-  computeDragRect,
-  nudgeRect,
-  type Point,
-  type Rect
-} from './selectionMath'
+// everything else from BUILD-SPEC.md §4.2/§4.3's region capture flow lives
+// here. Drag-rect *computation* lives in the main process
+// (main/overlay/dragCoordinator.ts) so a drag crossing a display boundary
+// stays correct — this file only reflects whatever main broadcasts and
+// forwards raw input (mousedown/up, modifier keys) back to it.
+import type { OverlaySelectionStatePayload, PointInPoints, RectInPoints } from '../../shared/types'
 
 const canvas = document.getElementById('overlay-canvas')
 const ctx = canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : null
 const toolbar = document.getElementById('toolbar')
 
-let anchor: Point | null = null
-let lastMouse: Point | null = null
 let dragging = false
-let liveRect: Rect | null = null
-let selection: Rect | null = null
+let liveRect: RectInPoints | null = null
+let selection: RectInPoints | null = null
+let isToolbarHost = false
 const mods = { shift: false, option: false, space: false }
 
 function bounds(): { width: number; height: number } {
@@ -39,7 +36,7 @@ function resizeCanvas(): void {
   render()
 }
 
-function drawBadge(rect: Rect): void {
+function drawBadge(rect: RectInPoints): void {
   if (!ctx) return
   const label = `${Math.round(rect.width)} × ${Math.round(rect.height)}`
   ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif'
@@ -69,6 +66,9 @@ function render(): void {
   ctx.fillRect(0, 0, width, height)
 
   const rect = liveRect ?? selection
+  // A cross-display selection's rect may fall partly or entirely outside
+  // this window's own canvas — clearRect/strokeRect silently no-op past the
+  // canvas edge, so no intersection check is needed here, only in main.
   if (!rect) return
 
   ctx.clearRect(rect.x, rect.y, rect.width, rect.height)
@@ -78,8 +78,8 @@ function render(): void {
   drawBadge(rect)
 }
 
-function currentModifiers(): { square: boolean; fromCenter: boolean } {
-  return { square: mods.shift, fromCenter: mods.option }
+function currentModifiers(): { square: boolean; fromCenter: boolean; space: boolean } {
+  return { square: mods.shift, fromCenter: mods.option, space: mods.space }
 }
 
 /**
@@ -87,7 +87,7 @@ function currentModifiers(): { square: boolean; fromCenter: boolean } {
  * to display bounds (BUILD-SPEC.md §4.3). Lives inside the overlay window
  * itself — inherits always-on-top for free, no separate window needed.
  */
-function positionToolbar(rect: Rect): void {
+function positionToolbar(rect: RectInPoints): void {
   if (!toolbar) return
   toolbar.classList.add('visible')
 
@@ -114,53 +114,53 @@ function hideToolbar(): void {
 
 function resetSelectionState(): void {
   dragging = false
-  anchor = null
-  lastMouse = null
   liveRect = null
   selection = null
+  isToolbarHost = false
   hideToolbar()
   render()
 }
 
 function onMouseDown(event: MouseEvent): void {
-  const point: Point = { x: event.clientX, y: event.clientY }
-  anchor = point
-  lastMouse = point
+  const anchorInPoints: PointInPoints = { x: event.clientX, y: event.clientY }
   dragging = true
   selection = null
+  isToolbarHost = false
   hideToolbar()
-  liveRect = computeDragRect(anchor, point, currentModifiers())
-  render()
-}
-
-function onMouseMove(event: MouseEvent): void {
-  if (!dragging || !anchor || !lastMouse) return
-  const point: Point = { x: event.clientX, y: event.clientY }
-
-  // Space = move the existing selection: shift the anchor by the same delta
-  // as the pointer, so the anchor-to-pointer vector (and thus the rect's
-  // size) stays constant while its position follows the pointer.
-  if (mods.space) {
-    anchor = { x: anchor.x + (point.x - lastMouse.x), y: anchor.y + (point.y - lastMouse.y) }
-  }
-  lastMouse = point
-
-  liveRect = clampRectToBounds(computeDragRect(anchor, point, currentModifiers()), bounds())
-  render()
+  window.overlayApi.startDrag(anchorInPoints, currentModifiers())
 }
 
 function onMouseUp(): void {
   if (!dragging) return
   dragging = false
-  if (liveRect && liveRect.width >= 2 && liveRect.height >= 2) {
-    selection = liveRect
+  window.overlayApi.endDrag()
+}
+
+function onSelectionState(payload: OverlaySelectionStatePayload): void {
+  if (payload.phase === 'dragging') {
+    liveRect = payload.rectInPoints
+    selection = null
+    isToolbarHost = false
+    hideToolbar()
+    render()
+    return
+  }
+
+  liveRect = null
+  isToolbarHost = payload.isToolbarHost
+  if (payload.rectInPoints.width < 2 || payload.rectInPoints.height < 2) {
+    selection = null
+    hideToolbar()
+    render()
+    return
+  }
+
+  selection = payload.rectInPoints
+  if (isToolbarHost) {
     positionToolbar(selection)
   } else {
     hideToolbar()
   }
-  liveRect = null
-  anchor = null
-  lastMouse = null
   render()
 }
 
@@ -178,9 +178,7 @@ function triggerSave(): void {
 
 function triggerRedo(): void {
   hideToolbar()
-  selection = null
-  liveRect = null
-  render()
+  window.overlayApi.redoSelection()
 }
 
 function triggerCancel(): void {
@@ -206,11 +204,15 @@ function onKeyDown(event: KeyboardEvent): void {
     triggerCopy()
     return
   }
+
   if (event.key === 'Shift') mods.shift = true
   if (event.key === 'Alt') mods.option = true
   if (event.key === ' ') {
     mods.space = true
     event.preventDefault()
+  }
+  if (dragging) {
+    window.overlayApi.sendDragModifiers(currentModifiers())
   }
 
   if (selection && !dragging) {
@@ -223,9 +225,7 @@ function onKeyDown(event: KeyboardEvent): void {
     else if (event.key === 'ArrowRight') dx = step
 
     if (dx !== 0 || dy !== 0) {
-      selection = clampRectToBounds(nudgeRect(selection, dx, dy), bounds())
-      positionToolbar(selection)
-      render()
+      window.overlayApi.nudgeSelection(dx, dy)
       event.preventDefault()
     }
   }
@@ -235,16 +235,19 @@ function onKeyUp(event: KeyboardEvent): void {
   if (event.key === 'Shift') mods.shift = false
   if (event.key === 'Alt') mods.option = false
   if (event.key === ' ') mods.space = false
+  if (dragging) {
+    window.overlayApi.sendDragModifiers(currentModifiers())
+  }
 }
 
 if (canvas instanceof HTMLCanvasElement) {
   window.addEventListener('resize', resizeCanvas)
   canvas.addEventListener('mousedown', onMouseDown)
-  window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   window.overlayApi.onReset(resetSelectionState)
+  window.overlayApi.onSelectionState(onSelectionState)
 
   document.getElementById('toolbar-copy')?.addEventListener('click', triggerCopy)
   document.getElementById('toolbar-save')?.addEventListener('click', triggerSave)

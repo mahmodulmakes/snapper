@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampRectToBounds, computeDragRect, nudgeRect, translateRect } from '../../src/renderer/overlay/selectionMath'
+import { clampRectToBounds, computeDragRect, nudgeRect, rectIntersection, translateRect } from '../../src/shared/selectionMath'
 
 describe('computeDragRect', () => {
   it('computes a plain rect dragging down-right', () => {
@@ -70,5 +70,32 @@ describe('clampRectToBounds', () => {
   it('shrinks a rect wider/taller than the bounds themselves', () => {
     const rect = clampRectToBounds({ x: 0, y: 0, width: 1500, height: 1200 }, bounds)
     expect(rect).toEqual({ x: 0, y: 0, width: 1000, height: 800 })
+  })
+})
+
+describe('rectIntersection', () => {
+  it('returns the overlapping area of two overlapping rects', () => {
+    const result = rectIntersection({ x: 0, y: 0, width: 100, height: 100 }, { x: 50, y: 50, width: 100, height: 100 })
+    expect(result).toEqual({ x: 50, y: 50, width: 50, height: 50 })
+  })
+
+  it('returns null for rects that do not touch at all', () => {
+    const result = rectIntersection({ x: 0, y: 0, width: 10, height: 10 }, { x: 100, y: 100, width: 10, height: 10 })
+    expect(result).toBeNull()
+  })
+
+  it('returns null for rects that only touch at an edge (zero-area overlap)', () => {
+    const result = rectIntersection({ x: 0, y: 0, width: 100, height: 100 }, { x: 100, y: 0, width: 100, height: 100 })
+    expect(result).toBeNull()
+  })
+
+  it('handles negative-origin rects (a display positioned above/left of the primary)', () => {
+    const result = rectIntersection({ x: 50, y: -50, width: 300, height: 100 }, { x: 0, y: -1080, width: 1920, height: 1080 })
+    expect(result).toEqual({ x: 50, y: -50, width: 300, height: 50 })
+  })
+
+  it('returns a rect fully contained within the other unchanged', () => {
+    const result = rectIntersection({ x: 10, y: 10, width: 20, height: 20 }, { x: 0, y: 0, width: 100, height: 100 })
+    expect(result).toEqual({ x: 10, y: 10, width: 20, height: 20 })
   })
 })

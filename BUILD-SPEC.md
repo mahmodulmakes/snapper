@@ -126,14 +126,14 @@ Relevant flags:
 
 Your capture path is: draw your own selection overlay in Electron → compute the rect → shell out to `screencapture -x -R … out.png` → read the file → hand to clipboard and disk.
 
-**Retina caveat — RESOLVED by Phase 0 spike, see `spikes/FINDINGS.md`.** `-R x,y,w,h` takes Electron's global point coordinates as input and returns native (scaleFactor-multiplied) pixels as output, confirmed on this dev machine's single Retina display plus an independent `-D` full-display cross-check. The negative-origin / mixed-DPI / rotated-display matrix below is still unverified — needs a second physical display.
+**Retina caveat — RESOLVED by Phase 0 spike, see `spikes/FINDINGS.md`.** `-R x,y,w,h` takes Electron's global point coordinates as input and returns native (scaleFactor-multiplied) pixels as output — confirmed on both a single Retina display and, in a later re-run once a second monitor was available, on a real negative-origin (external positioned above primary) + mixed-DPI (2× Retina primary, 1× external) setup. Both displays independently produced native pixels at their own scaleFactor; the negative-`y` origin captured exactly on target with no clipping. Only a real rotated-90° display remains unverified — no such hardware available; the unit tests simulate it based on Electron's documented bounds-swapping behavior.
 
 ### 3.2 Coordinate systems — the #1 source of multi-monitor bugs
 
 You will be juggling three coordinate spaces:
 
 1. **Electron `screen` API** — logical points, origin top-left of the primary display, other displays can have negative x/y.
-2. **`screencapture -R`** — global points, same origin convention (confirmed in the spike for the single-display case).
+2. **`screencapture -R`** — global points, same origin convention (confirmed in the spike, including the negative-origin multi-monitor case).
 3. **Image pixels** — points × `display.scaleFactor`.
 
 **Rule: write one module, `displayManager.ts`, that owns every conversion. No other file is allowed to multiply or divide by `scaleFactor`.** Unit-test it against fixtures for: single Retina, Retina + non-Retina external, display to the left of primary (negative x), display above primary (negative y), and a vertical/rotated display.
@@ -377,7 +377,7 @@ Estimates assume one focused developer working with Claude Code.
 Answer these before writing production code. Each is a throwaway script, kept in `spikes/`.
 
 1. ✅ **Done.** Does `screencapture -R` return native Retina pixels? — confirmed yes (native pixels out, points in). See `spikes/FINDINGS.md`.
-2. 🟡 **Partially done.** Do global coordinates from Electron's `screen` API map 1:1 onto `screencapture -R` on a mixed-DPI, negative-origin multi-monitor setup? Single-display origin/edges confirmed correct; the actual negative-origin/mixed-DPI/rotated matrix still needs a second physical display.
+2. ✅ **Done.** Do global coordinates from Electron's `screen` API map 1:1 onto `screencapture -R` on a mixed-DPI, negative-origin multi-monitor setup? Confirmed with a real second monitor (1× external, negative-`y` origin above a 2× Retina primary) — both displays produced correct native-pixel output at their own scaleFactor, no clipping at the negative-origin corner. Rotated-display case still untested (no hardware). Surfaced a real architecture gap, not a coordinate-math one: the current one-overlay-window-per-display design can't track a drag that crosses from one display's screen area into another's — see `spikes/FINDINGS.md`.
 3. ✅ **Done.** Can a transparent always-on-top `screen-saver`-level BrowserWindow cover a display *including* over a fullscreen app? — confirmed yes, but only with `fullscreenable: true` (the spec originally said `false` — that was wrong, see §3.3 and `spikes/FINDINGS.md`). Click-through (`setIgnoreMouseEvents`) confirmed independent of this, no conflict.
 4. ⏸️ **Skipped for now.** Measure hotkey→overlay-visible latency with a pre-warmed hidden window pool. Target < 80 ms. Revisit once `overlayManager.ts` exists for real — no need to spike this in isolation first.
 5. ⏸️ **Skipped for now**, deferred along with scrolling capture (§2.4/§3.5). Can you synthesize a scroll event into another app, and what permission does it actually cost?
@@ -432,7 +432,7 @@ Annotation editor, scrolling capture, screenshot history, pin-to-screen, and any
 |---|---|---|
 | `screencapture -R` doesn't give native pixels | Rewrites the coordinate model | Phase 0 spike (done — confirmed native pixels, no fallback needed) |
 | Electron bundle size hurts reviews | Unfavorable Shottr comparisons | Don't compete on size; prune with `asar` + `files` allowlist; consider Swift helper later |
-| Multi-monitor edge cases | Bad reviews from exactly the target user | `displayManager` unit tests; test on a real multi-monitor rig before shipping (spike 2 is still open) |
+| Multi-monitor edge cases | Bad reviews from exactly the target user | `displayManager` unit tests (negative-origin/mixed-DPI confirmed, spike 2 done); cross-display drag selection is a known open architecture gap, not yet fixed |
 | Screen Recording permission confusion | Support burden, 1-star "doesn't work" reviews | Dedicated onboarding screen with deep link + restart button |
 | Notarization rejection | Launch delay | Notarize from Phase 1, not Phase 7 — find the problems early |
 | Solo maintenance load | Burnout | Ruthless v1 scope; the "deferred" and "out of scope" lists in §2.4 are load-bearing |

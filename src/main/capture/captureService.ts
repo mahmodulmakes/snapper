@@ -1,11 +1,22 @@
-import { app, Notification } from 'electron'
+import { app, Notification, screen } from 'electron'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { playCaptureSound } from './captureSound'
+import { planCapture, type DisplayInfo } from './displayManager'
 import { captureRegion, ScreenCaptureError } from './screencapture'
+import { stitchSegments } from './stitcher'
 import { copyImageFileToClipboard } from '../output/clipboard'
 import { saveScreenshotFile } from '../output/fileWriter'
 import { logger } from '../logger'
 import type { RectInPoints } from '../../shared/types'
+
+function currentDisplayInfos(): DisplayInfo[] {
+  return screen.getAllDisplays().map((display) => ({
+    id: display.id,
+    boundsInPoints: display.bounds,
+    scaleFactor: display.scaleFactor
+  }))
+}
 
 export interface CaptureResult {
   savedPath: string
@@ -25,12 +36,41 @@ function notifyFailure(message: string): void {
   }
 }
 
-/** Captures to a scratch file under the app's own temp directory (Hard Rule 7). Caller must clean it up. */
+/**
+ * Captures to a scratch file under the app's own temp directory (Hard Rule
+ * 7). Caller must clean it up. For the common case (every display the rect
+ * touches shares one scaleFactor, including single-display) this is one
+ * `-R` call. For a selection crossing a scaleFactor boundary, captures each
+ * display's segment separately at its own native resolution and stitches
+ * them (see displayManager.ts's `planCapture` and stitcher.ts).
+ */
 async function captureToTemp(rectInPoints: RectInPoints): Promise<TempCapture | null> {
   const tempDir = await mkdtemp(join(app.getPath('temp'), 'screenshot-app-'))
   const tempPath = join(tempDir, 'capture.png')
+  const plan = planCapture(rectInPoints, currentDisplayInfos())
+
   try {
-    await captureRegion({ rectInPoints, outputPath: tempPath })
+    if (plan.singleCapture) {
+      await captureRegion({ rectInPoints, outputPath: tempPath })
+      playCaptureSound()
+      return { tempDir, tempPath }
+    }
+
+    const segmentFiles = await Promise.all(
+      plan.segments.map(async (segment, index) => {
+        const segmentPath = join(tempDir, `segment-${index}.png`)
+        await captureRegion({ rectInPoints: segment.segmentRectInPoints, outputPath: segmentPath })
+        return {
+          pngPath: segmentPath,
+          destXPixels: segment.destInPixels.x,
+          destYPixels: segment.destInPixels.y,
+          resizeToPixels: segment.resizeToPixels
+        }
+      })
+    )
+
+    await stitchSegments({ segments: segmentFiles, outputPath: tempPath, compositeSizeInPixels: plan.compositeSizeInPixels })
+    playCaptureSound()
     return { tempDir, tempPath }
   } catch (err) {
     const message = err instanceof ScreenCaptureError ? err.message : 'screencapture failed unexpectedly'
