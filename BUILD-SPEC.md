@@ -400,7 +400,7 @@ Menu bar tray, `LSUIElement`, dock hidden, single-instance lock, build pipeline 
 
 Overlay window pool, Canvas selection UI, magnifier loupe, modifier keys, multi-display drag, focus restore.
 
-**Done when:** selecting a region that spans the boundary between two displays with different scale factors produces a correct image.
+**Done when:** selecting a region that spans the boundary between two displays with different scale factors produces a correct image. ✅ **Confirmed** on real two-display hardware: cross-display drag tracking (main-process cursor polling, `main/overlay/dragCoordinator.ts`) plus native-resolution stitching for mixed-scaleFactor spans (`main/capture/stitcher.ts`) — see `spikes/FINDINGS.md` spike 4 and the post-hoc `getBounds()`-origin finding below it. Magnifier loupe: shipped for the idle (pre-drag) case only — see `magnifier.ts`'s header comment for the scope cut and why. Focus restore is still open.
 
 ### Phase 4 — Floating toolbar (3–4 days)
 
@@ -432,7 +432,7 @@ Annotation editor, scrolling capture, screenshot history, pin-to-screen, and any
 |---|---|---|
 | `screencapture -R` doesn't give native pixels | Rewrites the coordinate model | Phase 0 spike (done — confirmed native pixels, no fallback needed) |
 | Electron bundle size hurts reviews | Unfavorable Shottr comparisons | Don't compete on size; prune with `asar` + `files` allowlist; consider Swift helper later |
-| Multi-monitor edge cases | Bad reviews from exactly the target user | `displayManager` unit tests (negative-origin/mixed-DPI confirmed, spike 2 done); cross-display drag selection is a known open architecture gap, not yet fixed |
+| Multi-monitor edge cases | Bad reviews from exactly the target user | `displayManager` unit tests (negative-origin/mixed-DPI confirmed, spike 2 done); cross-display drag selection confirmed on real hardware (spike 4 + `dragCoordinator.ts`/`stitcher.ts`); a related `BrowserWindow.getBounds()` origin bug found and fixed during that verification (spikes/FINDINGS.md) |
 | Screen Recording permission confusion | Support burden, 1-star "doesn't work" reviews | Dedicated onboarding screen with deep link + restart button |
 | Notarization rejection | Launch delay | Notarize from Phase 1, not Phase 7 — find the problems early |
 | Solo maintenance load | Burnout | Ruthless v1 scope; the "deferred" and "out of scope" lists in §2.4 are load-bearing |
