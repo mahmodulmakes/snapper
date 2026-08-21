@@ -2,7 +2,6 @@ import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent, type I
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { captureRectAndCopy, captureRectAndSave } from '../capture/captureService'
-import { captureFullPageAndOutput } from '../capture/scrollingCapture'
 import { getDesktopCaptureSourceId } from '../capture/desktopCaptureSource'
 import { originForDisplayId, overlayLocalRectToGlobalPoints } from '../capture/displayManager'
 import { activateApp, getFrontmostAppBundleId } from '../capture/frontmostApp'
@@ -164,22 +163,6 @@ async function handleSaveAction(event: IpcMainEvent, localRectInPoints: RectInPo
   })
 }
 
-/**
- * Floating toolbar's "Full Page" button (BUILD-SPEC.md §3.5). Reuses the
- * same hideOverlaysAndRestoreFocus() as Copy/Save — essential here, not
- * just nice-to-have: the scroll-synthesis loop needs the target app to
- * actually be frontmost/focused to receive the synthetic scroll events, not
- * just to look right in the capture.
- */
-async function handleFullPageAction(event: IpcMainEvent, localRectInPoints: RectInPoints): Promise<void> {
-  const globalRectInPoints = toGlobalRect(event, localRectInPoints)
-  if (!globalRectInPoints) return
-  await hideOverlaysAndRestoreFocus()
-  captureFullPageAndOutput(globalRectInPoints).catch((err: unknown) => {
-    logger.error('Full-page capture failed unexpectedly.', err)
-  })
-}
-
 /** Magnifier loupe (BUILD-SPEC.md §4.2 step 3): resolves the sender's own display's desktopCapturer source id. */
 async function handleGetCaptureSourceId(event: IpcMainInvokeEvent): Promise<string | null> {
   const entry = overlays.find((o) => o.window.webContents === event.sender)
@@ -202,7 +185,6 @@ export function initOverlayWindows(): void {
     ipcMain.on(IPC.OVERLAY_DISMISS, () => hideOverlays())
     ipcMain.on(IPC.OVERLAY_ACTION_COPY, handleCopyAction)
     ipcMain.on(IPC.OVERLAY_ACTION_SAVE, handleSaveAction)
-    ipcMain.on(IPC.OVERLAY_ACTION_FULL_PAGE, handleFullPageAction)
     ipcMain.on(IPC.OVERLAY_DRAG_START, (event, payload) => handleDragStart(overlays, event, payload))
     ipcMain.on(IPC.OVERLAY_DRAG_MODIFIERS, (_event, payload) => handleDragModifiers(overlays, payload))
     ipcMain.on(IPC.OVERLAY_DRAG_END, () => handleDragEnd(overlays))
@@ -220,7 +202,6 @@ export function teardownOverlayWindows(): void {
   ipcMain.removeAllListeners(IPC.OVERLAY_DISMISS)
   ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_COPY)
   ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_SAVE)
-  ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_FULL_PAGE)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_START)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_MODIFIERS)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_END)

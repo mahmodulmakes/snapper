@@ -87,6 +87,7 @@ If monetization becomes relevant later, revisit it as its own scoping conversati
 **Deferred — not in v1.0, may return later.** These have real design thinking already written up in this spec (§3.5, §4.5, §4.8) — that content is preserved as reference, not deleted, but none of it gets built until it's explicitly back in scope:
 
 - Annotation editor (arrows, shapes, text, blur/pixelate, crop, etc.) — §4.5
+- Scrolling capture — §3.5, §4.5 not applicable; see §3.5
 - Screenshot history — §4.8
 - "Pin to screen" floating pinned captures
 - Window capture as a distinct mode (hover-to-highlight-window, dedicated shortcut) — region capture covers the requirement list; this is extra interaction surface not currently requested
@@ -161,11 +162,13 @@ Screen capture requires user consent on macOS 10.15+.
 - Add `NSScreenCaptureUsageDescription` to Info.plist via electron-builder's `extendInfo`.
 - Build a proper onboarding screen: explain *why* you need the permission, deep-link to `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`, then offer restart.
 - **Dev-mode gotcha, confirmed firsthand during Phase 0 spikes:** `screencapture`, invoked from a dev Electron process, needs Screen Recording permission granted to *that specific Electron binary* (`node_modules/electron/dist/Electron.app`), not the terminal and not the eventual packaged app. Without it, every capture fails with `could not create image from rect` / `could not create image from display`.
-- Accessibility permission — implemented (`main/permissions/accessibility.ts`), requested lazily on first "Full Page" capture, not at launch. Separate grant from Screen Recording.
+- Accessibility permission would additionally be required if scrolling capture synthesizes scroll events — moot while scrolling capture is deferred (§3.5).
 
-### 3.5 Scrolling capture — brought into scope, implemented
+### 3.5 Scrolling capture — DEFERRED, not in v1.0 (§2.4)
 
-Explicitly requested and brought back into scope; see `PHASES.md`'s "Full-page (scrolling) capture" section for implementation notes, the real spike result (`.cgSessionEventTap`, not `.cghidEventTap` — the latter is silently ignored by Safari/WebKit), and current verification status. The design below is what was actually built against, largely as originally planned:
+Kept here as reference design work for whenever this comes back into scope. Do not build against this section until it's explicitly back in the "in scope" list.
+
+The hardest feature on the list. Approach:
 
 1. User selects a region (typically a scrollable pane).
 2. Capture frame 1.
@@ -251,7 +254,7 @@ screenshot-app/
     └── fixtures/
 ```
 
-`editor/`, `pin/`, `licensing/`, and `output/history.ts` are deliberately absent — they belong to still-deferred features (§2.4). `scrollingCapture.ts`, `stitcher.ts` (the cross-display one, plus a separate `scrollStitcher.ts` for scroll-overlap stitching), and `accessibility.ts` are no longer deferred — scrolling capture was brought into scope, see §3.5/PHASES.md. The current scaffold still has a few leftover stub files for the editor window from before this scope trim (`src/renderer/editor/*`, `src/preload/editor.preload.ts`, and the corresponding `electron.vite.config.ts` build input); they're inert and can be removed whenever it's convenient, or left until the editor is back in scope.
+`scrollingCapture.ts`, `stitcher.ts`, `editor/`, `pin/`, `licensing/`, `output/history.ts`, and `accessibility.ts` (scrolling-capture-only) are deliberately absent — they belong to deferred features (§2.4). The current scaffold still has a few leftover stub files for the editor window from before this scope trim (`src/renderer/editor/*`, `src/preload/editor.preload.ts`, and the corresponding `electron.vite.config.ts` build input); they're inert and can be removed whenever it's convenient, or left until the editor is back in scope.
 
 ### 3.9 Security posture
 
@@ -377,7 +380,7 @@ Answer these before writing production code. Each is a throwaway script, kept in
 2. ✅ **Done.** Do global coordinates from Electron's `screen` API map 1:1 onto `screencapture -R` on a mixed-DPI, negative-origin multi-monitor setup? Confirmed with a real second monitor (1× external, negative-`y` origin above a 2× Retina primary) — both displays produced correct native-pixel output at their own scaleFactor, no clipping at the negative-origin corner. Rotated-display case still untested (no hardware). Surfaced a real architecture gap, not a coordinate-math one: the current one-overlay-window-per-display design can't track a drag that crosses from one display's screen area into another's — see `spikes/FINDINGS.md`.
 3. ✅ **Done.** Can a transparent always-on-top `screen-saver`-level BrowserWindow cover a display *including* over a fullscreen app? — confirmed yes, but only with `fullscreenable: true` (the spec originally said `false` — that was wrong, see §3.3 and `spikes/FINDINGS.md`). Click-through (`setIgnoreMouseEvents`) confirmed independent of this, no conflict.
 4. ⏸️ **Skipped for now.** Measure hotkey→overlay-visible latency with a pre-warmed hidden window pool. Target < 80 ms. Revisit once `overlayManager.ts` exists for real — no need to spike this in isolation first.
-5. ✅ **Done.** Can you synthesize a scroll event into another app, and what permission does it actually cost? Yes — `CGEventCreateScrollWheelEvent` posted via `.cgSessionEventTap`, confirmed against both a native AppKit app and real Safari/WebKit content. `.cghidEventTap` (the initially-obvious choice) is silently ignored by Safari specifically — worked fine in TextEdit, did nothing in a browser, no error either way. Costs a separate Accessibility permission grant from Screen Recording. See PHASES.md for full detail.
+5. ⏸️ **Skipped for now**, deferred along with scrolling capture (§2.4/§3.5). Can you synthesize a scroll event into another app, and what permission does it actually cost?
 
 **Gate:** if spike 1 or 2 fails, the coordinate model changes and Phase 3 must be redesigned. Do not skip.
 
@@ -419,7 +422,7 @@ Developer ID signing, hardened runtime, entitlements, notarization + stapling, D
 
 ### Deferred to post-v1.0 (§2.4) — not scheduled, no phase number
 
-Annotation editor, screenshot history, pin-to-screen, and any licensing/monetization work. Each has design notes preserved in this spec (§4.5, §4.8) for whenever it's explicitly brought back into scope — don't start on these without that explicit decision. (Scrolling capture, formerly listed here, was brought into scope and implemented — see §3.5.)
+Annotation editor, scrolling capture, screenshot history, pin-to-screen, and any licensing/monetization work. Each has design notes preserved in this spec (§3.5, §4.5, §4.8) for whenever it's explicitly brought back into scope — don't start on these without that explicit decision.
 
 ---
 

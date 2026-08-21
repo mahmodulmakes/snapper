@@ -8,9 +8,6 @@ files:
   - package.json
 asarUnpack:
   - '**/*.node'
-extraResources:
-  - from: resources/scrollhelper
-    to: scrollhelper
 mac:
   icon: build/icon.png
   category: public.app-category.productivity

@@ -96,18 +96,7 @@ Verified: typecheck, lint, and all 52 unit tests pass. Full live re-verification
 Design notes preserved in `BUILD-SPEC.md` (§3.5, §4.5, §4.8) as reference. Don't start on these without an explicit decision to bring them back into scope:
 
 - Annotation editor
+- Scrolling capture
 - Screenshot history
 - Pin-to-screen
 - Licensing / monetization
-
-## Full-page (scrolling) capture — brought into scope, implemented
-
-Explicitly requested and brought back into scope (was deferred per §2.4/§3.5). Feasibility spiked first (per this repo's "spike before building" convention) rather than building blind:
-
-- **Spike result:** scroll-event synthesis works via `CGEventCreateScrollWheelEvent`, but **only when posted via `.cgSessionEventTap`** — `.cghidEventTap` was silently ignored by Safari/WebKit (worked fine in TextEdit, a native AppKit app) with no error, nothing scrolls. Found by testing against a real browser, not by reading it off Apple's docs. Documented at length in `native/scrollhelper/main.swift`'s header comment so this doesn't get "corrected" back to the wrong tap by someone who hasn't hit this.
-- **Architecture:** a bundled native Swift helper (`native/scrollhelper/`, compiled by `scripts/buildScrollHelper.mjs` into `resources/scrollhelper`, invoked via `execFile` from `main/capture/scrollSynthesis.ts`) — same subprocess-helper pattern as `screencapture`, not a native Node addon, consistent with this app's existing architecture. Needs its own Accessibility permission grant (`main/permissions/accessibility.ts`), separate from Screen Recording — requested lazily on first use, not at launch, per `BUILD-SPEC.md` §3.5.
-- **Stitching:** `main/capture/scrollStitcher.ts` — cross-correlation overlap detection on a horizontal strip of rows (BUILD-SPEC.md §3.5's design), with fixture-based tests (`test/unit/scrollStitcher.test.ts`) that slice a known tall image into overlapping frames at known offsets and assert exact reconstruction — same treatment CLAUDE.md already called for.
-- **Orchestration:** `main/capture/scrollingCapture.ts` — capture, scroll, poll-until-settled (cap ~400ms), repeat until no new content or a hard cap (50 frames / 30,000px), stitch, output to both clipboard and disk (matching full-screen capture's default-both behavior, not a separate Copy/Save choice).
-- **UI:** new "Full Page" button on the floating toolbar, alongside Copy/Save/Redo/Cancel.
-
-**Not yet verified end-to-end in the packaged app** — typecheck, lint, and all fixture-based unit tests pass, and the underlying scroll-synthesis mechanism was proven against real TextEdit + Safari targets, but a live run of the fully-wired pipeline (real drag-select → Full Page click → scroll loop → stitched output) hasn't been completed. The test environment's Accessibility grant for `osascript` (used to drive the test targets) changed mid-session, and the target windows' positions shifted since the user was actively using the machine — needs a real hands-on test.

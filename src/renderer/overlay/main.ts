@@ -187,12 +187,6 @@ function triggerSave(): void {
   window.overlayApi.saveSelection(selection)
 }
 
-function triggerFullPage(): void {
-  if (!selection) return
-  hideToolbar()
-  window.overlayApi.captureFullPage(selection)
-}
-
 function triggerRedo(): void {
   hideToolbar()
   window.overlayApi.redoSelection()
@@ -277,7 +271,6 @@ if (canvas instanceof HTMLCanvasElement) {
 
   document.getElementById('toolbar-copy')?.addEventListener('click', triggerCopy)
   document.getElementById('toolbar-save')?.addEventListener('click', triggerSave)
-  document.getElementById('toolbar-full-page')?.addEventListener('click', triggerFullPage)
   document.getElementById('toolbar-redo')?.addEventListener('click', triggerRedo)
   document.getElementById('toolbar-cancel')?.addEventListener('click', triggerCancel)
 

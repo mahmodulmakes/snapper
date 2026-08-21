@@ -53,15 +53,12 @@ src/
 | Running `screencapture` | `main/capture/screencapture.ts` |
 | Display enumeration, coordinate/scale conversion | `main/capture/displayManager.ts` |
 | Orchestrating one capture end-to-end | `main/capture/captureService.ts` |
-| Orchestrating one full-page (scrolling) capture end-to-end | `main/capture/scrollingCapture.ts` |
-| Scroll-event synthesis (native helper) | `main/capture/scrollSynthesis.ts`, `native/scrollhelper/` |
-| Scroll-frame overlap stitching | `main/capture/scrollStitcher.ts` |
 | Overlay window pool | `main/overlay/overlayManager.ts` |
 | Global shortcut registration | `main/shortcuts/shortcutManager.ts` |
 | Persisted settings | `main/settings/store.ts` |
 | IPC channel names | `main/ipc/channels.ts` |
 
-Scrolling (full-page) capture was brought into scope and implemented — see BUILD-SPEC.md §3.5 and PHASES.md for the spike result and current status. The annotation editor, history, and pin windows remain **deferred, not in v1.0 scope** — see BUILD-SPEC.md §2.4. Don't build ownership around those until they're back in scope.
+Scrolling capture (`scrollingCapture.ts`, `stitcher.ts`), the annotation editor, history, and pin windows are **deferred, not in v1.0 scope** — see BUILD-SPEC.md §2.4. Don't build ownership around them until they're back in scope.
 
 **IPC discipline:** every channel name is a constant in `main/ipc/channels.ts`. No string literals for channels anywhere else. Every payload type is declared in `shared/types.ts`.
 
