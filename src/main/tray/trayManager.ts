@@ -16,7 +16,7 @@ const TRAY_ICON_SOURCE = nativeImage.createFromDataURL(
 export function createTray(handlers: TrayMenuHandlers, state: TrayMenuState): Tray {
   if (tray) return tray
 
-  const icon = TRAY_ICON_SOURCE.resize({ width: 20, height: 20 })
+  const icon = TRAY_ICON_SOURCE.resize({ width: 19, height: 19 })
   icon.setTemplateImage(true)
 
   tray = new Tray(icon)
