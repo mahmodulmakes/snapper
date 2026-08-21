@@ -1,5 +1,5 @@
-appId: com.screenshotapp.macos
-productName: Screenshot
+appId: com.snapperapp.macos
+productName: Snapper
 directories:
   buildResources: build
   output: dist
@@ -9,6 +9,7 @@ files:
 asarUnpack:
   - '**/*.node'
 mac:
+  icon: build/icon.png
   category: public.app-category.productivity
   target:
     - target: dmg
@@ -20,7 +21,7 @@ mac:
   extendInfo:
     LSUIElement: true
     NSScreenCaptureUsageDescription: >-
-      Screenshot needs Screen Recording access to capture your screen.
+      Snapper needs Screen Recording access to capture your screen.
       Nothing captured ever leaves your Mac.
 dmg:
   contents:

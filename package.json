@@ -1,8 +1,8 @@
 {
-  "name": "screenshot-app",
+  "name": "snapper",
   "version": "0.0.1",
   "private": true,
-  "description": "A fast, local-only screenshot tool for macOS.",
+  "description": "Snapper — a fast, local-only screenshot tool for macOS.",
   "author": "",
   "main": "out/main/index.js",
   "type": "module",

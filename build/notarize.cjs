@@ -16,7 +16,7 @@ exports.default = async function notarizeApp(context) {
   const appName = context.packager.appInfo.productFilename
 
   await notarize({
-    appBundleId: 'com.screenshotapp.macos',
+    appBundleId: 'com.snapperapp.macos',
     appPath: `${appOutDir}/${appName}.app`,
     appleId: APPLE_ID,
     appleIdPassword: APPLE_APP_SPECIFIC_PASSWORD,
