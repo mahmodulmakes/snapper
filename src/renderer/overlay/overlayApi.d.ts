@@ -4,6 +4,7 @@ export interface OverlayApi {
   dismiss: () => void
   copySelection: (rect: RectInPoints) => void
   saveSelection: (rect: RectInPoints) => void
+  captureFullPage: (rect: RectInPoints) => void
   onReset: (callback: () => void) => void
   startDrag: (anchorInPoints: PointInPoints, modifiers: DragModifiersPayload) => void
   sendDragModifiers: (modifiers: DragModifiersPayload) => void

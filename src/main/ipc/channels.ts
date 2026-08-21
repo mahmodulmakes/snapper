@@ -3,6 +3,7 @@ export const IPC = {
   OVERLAY_DISMISS: 'overlay:dismiss',
   OVERLAY_ACTION_COPY: 'overlay:action-copy',
   OVERLAY_ACTION_SAVE: 'overlay:action-save',
+  OVERLAY_ACTION_FULL_PAGE: 'overlay:action-full-page',
   OVERLAY_RESET: 'overlay:reset',
   OVERLAY_DRAG_START: 'overlay:drag-start',
   OVERLAY_DRAG_MODIFIERS: 'overlay:drag-modifiers',

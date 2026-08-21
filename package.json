@@ -8,8 +8,9 @@
   "type": "module",
   "scripts": {
     "build:preloads": "node scripts/buildPreloads.mjs",
-    "dev": "npm run build:preloads && electron-vite dev",
-    "build": "npm run typecheck && electron-vite build && npm run build:preloads",
+    "build:scrollhelper": "node scripts/buildScrollHelper.mjs",
+    "dev": "npm run build:preloads && npm run build:scrollhelper && electron-vite dev",
+    "build": "npm run typecheck && electron-vite build && npm run build:preloads && npm run build:scrollhelper",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "vitest run",
