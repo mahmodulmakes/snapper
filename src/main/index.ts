@@ -77,8 +77,12 @@ if (!gotSingleInstanceLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    // Menu-bar app has no window to focus; the tray icon is the entry point.
-    logger.info('Second instance attempted; ignoring (single-instance lock held).')
+    // A menu-bar app has no Dock icon or window to focus, so a user who
+    // double-clicks Snapper again while it's already running (not realizing
+    // that, or just wanting to get to it) would otherwise see literally
+    // nothing happen. Show Settings as the concrete "yes, I'm running" signal.
+    logger.info('Second launch attempt while already running; showing Settings.')
+    showSettingsWindow()
   })
 
   // Menu-bar utility: never show a Dock icon or appear in the app switcher.
@@ -96,6 +100,15 @@ if (!gotSingleInstanceLock) {
     onShortcutStateChange(() => updateTrayMenu(trayHandlers, currentTrayState()))
     if (!isScreenRecordingGranted()) {
       showOnboardingWindow()
+    } else if (!app.getLoginItemSettings().wasOpenedAtLogin) {
+      // Same "clicking the app should visibly do something" reasoning as the
+      // second-instance handler below, for the case where this is the FIRST
+      // instance: a manual launch (Finder double-click, Launchpad, Spotlight)
+      // with permission already granted otherwise shows nothing at all.
+      // wasOpenedAtLogin distinguishes that from the every-boot launch-at-login
+      // case, which must stay silent — nobody wants Settings popping up at
+      // every login.
+      showSettingsWindow()
     }
     logger.info('App ready; tray created, overlay window pool pre-warmed.')
   })
