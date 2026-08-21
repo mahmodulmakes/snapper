@@ -6,17 +6,18 @@ let tray: Tray | null = null
 // Monochrome template image (BUILD-SPEC.md §4.1) — crop-corners/viewfinder
 // glyph matching build/icon.png's motif, black-on-transparent so macOS can
 // auto-tint it for light/dark menu bars and the menu-open highlight state.
-// Source is 88x88px, resized to an 18x18pt logical size below — thinner
-// strokes and more padding than the first pass, which rendered noticeably
-// bigger/bolder than neighboring menu bar icons.
+// Source is 88x88px, resized to a 20x20pt logical size below. Went through
+// three passes on real feedback: 22pt/heavy strokes read too big and bold
+// next to neighboring menu bar icons; 18pt/thin strokes swung too far the
+// other way and read too small; this is the middle ground.
 const TRAY_ICON_SOURCE = nativeImage.createFromDataURL(
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABYCAYAAABxlTA0AAACM0lEQVR4nOzcvYpTQRjG8cdVxEILG7/uQRsVyw0ICl6CiLfi2FqLvRbegiIIR0s/QBRvQdDCell22X2HPVVIcSZn/st74PnBWyQ7gfDnMMlOSHZkqB0ZyoFhDgxzYJgDwxwY5sAwB4Y5MMyBYQ4Mc2CYA8McGObAMAeGnVMfq3HmKOqraJ5hnFl6Bn6meYr6mvt8qkEzeYuAOTDMgWG99uBNPqnDHjbD84a1q5hdAcjAg/q/cLUojWuRwN4iYA4Mc2CYA8McGObAMAeGOTDMgWEODDsjQ/kKhjkwjDxN6+l8zK2Y2+PtbzG/YvaV3BIC3495G3Nl7f6/MU9jPiixs8rrQsyLmFcxFzf8vd73JOZSzOeYAyWU+V3Ew5j3E9c+inmnhLIGvhzzO+b6xPV/Ym7G/FcyWd9F1Kt3atzqRswDJZT1Re6a2m3zGFzWwHtqt81jcFkD/1C7bR6Dy7oHfx1nqu+N609N5rdpd2O+TFh3GHNPJ5HTyXwWUa/I1xPWvVTSuNUSjivr2683MVfX7v8X8zjmoxJbynlwPeyp/0jcGW/XK/anFnDY4wN3mM+DYQ4M6xW4xBytTdFyFEHP31cwzIFhDgxzYJgDwxwY5sAwB4Y5MMyBYeRnciu1f9uyp9KwdiUIGXhXbV9PLeqrx+9FzOYtAubAMAeG9dqDB+XT8nsRmwzqwJ/JwbxFwBwY5sAwB4Y5MMyBYQ4Mc2CYA8McGObAMAeGOTDMgWEODHNg2DEAAAD//8P70LQAAAAGSURBVAMA2pk8mIBu02UAAAAASUVORK5CYII='
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAABYCAYAAABxlTA0AAACZUlEQVR4nOzcv45MYRzG8cfSCAq20sgKCY0olIqde1AgEVew9+B1H0ShQOcSRqGUjISEQkgEFYVEqPB7c04l9s975v1ufrN5PsmTSGZ2Y787OXNmzmbWZKg1GcqBYQ4Mc2CYA8McGObAMAeGOTDMgWEODDuidrNxvRSxivqZj9uzqYHvqJ8iVs//azVvubMPETAHhjkwzIFhDgybchaxk2dqfJbdB3fVZhbbVCe9A8/Fn3a1KmpT1DGwDxEwB4Y5MMyBYQ4Mc2CYA8McGObAMAeGOTDskAzlRzDMgWG9364k1MPYmdiFcdWb2NvYx9gfJZY98LnYk9iVbW5/Ebsee6ekMh8ibsUW2j6uxtsW431TynoWcSP2SG1uxh4rmYyBT8dex06qzbfYpdhnJZLxEPFA7XGrU7F7SibbI3gj9l7LORv7oCSyPYIvankbSuQgBu7xPbrJdh78SwdMtsALLa/H9+gm25Pcsdh3TT90/Y4dj/1UEtmOwT9iDzVd/do0cauMLzTWNbyRs972ZfoUuxz7qkQyvtCogbbUbkvJ4laHldOr2EsNf+V4Ypf7fondjj1VQlkDV/U93/rStz5pnY8d/ef2+t7D/dg1Db+MlFbpmlx9AXF1/PdzDb+A9HzRE+ZrcjAHhk0JXDRcaPzfilZfUcefz49gmAPDHBjmwDAHhjkwzIFhDgxzYJgDwxwY1vuy/UzTPp+BVNRmpo56B95U+4dZFLF6f25aEx8iYA4Mc2CYA8McGDblLGKu1dL6uWk7mauRL9vDfIiAOTDMgWEODHNgmAPDHBjmwDAHhjkwzIFhfwEAAP//o2qdywAAAAZJREFUAwB700oiWmUh8QAAAABJRU5ErkJggg=='
 )
 
 export function createTray(handlers: TrayMenuHandlers, state: TrayMenuState): Tray {
   if (tray) return tray
 
-  const icon = TRAY_ICON_SOURCE.resize({ width: 18, height: 18 })
+  const icon = TRAY_ICON_SOURCE.resize({ width: 20, height: 20 })
   icon.setTemplateImage(true)
 
   tray = new Tray(icon)
