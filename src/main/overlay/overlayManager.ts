@@ -144,20 +144,20 @@ function toGlobalRect(event: IpcMainEvent, localRectInPoints: RectInPoints): Rec
 }
 
 /** Floating toolbar's Copy button (BUILD-SPEC.md §4.3). */
-function handleCopyAction(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
+async function handleCopyAction(event: IpcMainEvent, localRectInPoints: RectInPoints): Promise<void> {
   const globalRectInPoints = toGlobalRect(event, localRectInPoints)
   if (!globalRectInPoints) return
-  hideOverlays()
+  await hideOverlaysAndRestoreFocus()
   captureRectAndCopy(globalRectInPoints).catch((err: unknown) => {
     logger.error('Copy from region selection failed unexpectedly.', err)
   })
 }
 
 /** Floating toolbar's Save button (BUILD-SPEC.md §4.3). */
-function handleSaveAction(event: IpcMainEvent, localRectInPoints: RectInPoints): void {
+async function handleSaveAction(event: IpcMainEvent, localRectInPoints: RectInPoints): Promise<void> {
   const globalRectInPoints = toGlobalRect(event, localRectInPoints)
   if (!globalRectInPoints) return
-  hideOverlays()
+  await hideOverlaysAndRestoreFocus()
   captureRectAndSave(globalRectInPoints).catch((err: unknown) => {
     logger.error('Save from region selection failed unexpectedly.', err)
   })
@@ -243,13 +243,17 @@ export async function showOverlays(): Promise<void> {
   }
 }
 
-/** Hides every overlay and restores focus to whatever app was frontmost when the hotkey fired (BUILD-SPEC.md §4.2 step 7). */
-export function hideOverlays(): void {
+function hideOverlayWindows(): void {
   overlaysActive = false
   resetDragState()
   for (const entry of overlays) {
     entry.window.hide()
   }
+}
+
+/** Hides every overlay and restores focus to whatever app was frontmost when the hotkey fired (BUILD-SPEC.md §4.2 step 7). Fire-and-forgets the focus restore — fine for Cancel/Escape and display-change rebuilds, where no capture immediately follows. */
+export function hideOverlays(): void {
+  hideOverlayWindows()
   const bundleId = frontmostAppBundleIdAtHotkey
   frontmostAppBundleIdAtHotkey = null
   if (bundleId) {
@@ -257,4 +261,33 @@ export function hideOverlays(): void {
       logger.error('Could not restore focus after hiding overlays.', err)
     })
   }
+}
+
+// Empirically, macOS needs a moment after an app is reactivated before its
+// windows actually repaint in their "active" appearance (e.g. NSSwitch
+// toggle tint color, dimmed by default on a non-key window) — `open -b`
+// resolving only means the activation request was sent, not that the
+// repaint has happened. No event exists to await that repaint directly
+// (it's another app's process), so this is a pragmatic fixed delay, not a
+// precise one. Revisit if it proves too short (stale-tint captures) or
+// noticeably laggy in practice.
+const FOCUS_RESTORE_SETTLE_MS = 150
+
+/**
+ * Hides every overlay and — unlike `hideOverlays()` — WAITS for focus
+ * restoration to actually settle before resolving. Required before Copy/Save
+ * capture: capturing immediately after firing (not awaiting) the
+ * reactivation can photograph the target app's window still in its inactive,
+ * defocused appearance. Confirmed via a real capture of macOS System
+ * Settings' Accessibility pane: toggle switches lost their purple "on" tint
+ * and rendered gray, because the screenshot was taken before the reactivated
+ * window regained key-window status and repainted.
+ */
+async function hideOverlaysAndRestoreFocus(): Promise<void> {
+  hideOverlayWindows()
+  const bundleId = frontmostAppBundleIdAtHotkey
+  frontmostAppBundleIdAtHotkey = null
+  if (!bundleId) return
+  await activateApp(bundleId)
+  await new Promise((resolve) => setTimeout(resolve, FOCUS_RESTORE_SETTLE_MS))
 }
