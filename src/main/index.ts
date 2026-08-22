@@ -92,8 +92,14 @@ if (!gotSingleInstanceLock) {
     logger.info('Second launch attempt while already running (second-instance); showing Settings.')
     showSettingsWindow()
   })
-  app.on('activate', () => {
-    logger.info('App activated while already running (activate); showing Settings.')
+  app.on('activate', (_event, hasVisibleWindows) => {
+    // hasVisibleWindows is exactly the guard Electron's own docs recommend
+    // for this event, and it's essential here: 'activate' fires for far
+    // more than "user reopened the app" — showing/focusing the capture
+    // overlay on a hotkey press also counts, and without this check every
+    // capture would spuriously pop Settings open alongside the overlay.
+    if (hasVisibleWindows) return
+    logger.info('App activated while already running with no visible windows (activate); showing Settings.')
     showSettingsWindow()
   })
 
