@@ -35,9 +35,20 @@ export async function getFrontmostAppBundleId(): Promise<string | null> {
 // which reads as an unwanted popup, not a focus restoration. Skip it.
 const FINDER_BUNDLE_ID = 'com.apple.finder'
 
+// Must match electron-builder.yml's appId. If Settings (or any other
+// Snapper window) is the frontmost window when the capture hotkey fires —
+// e.g. left open from before — Snapper records ITSELF as "the app to
+// restore focus to". Reactivating your own app once its windows are hidden
+// is exactly the "no visible windows" condition index.ts's activate handler
+// treats as "user wants Settings" — so this would re-trigger the Settings
+// popup on every subsequent capture, not just once. Skip self-restoration
+// entirely; there's nothing to restore to if the previously-frontmost thing
+// was this app.
+const OWN_BUNDLE_ID = 'com.snapperapp.macos'
+
 /** Re-activates a previously-frontmost app by bundle id (e.g. after Esc cancels a capture). */
 export async function activateApp(bundleId: string): Promise<void> {
-  if (bundleId === FINDER_BUNDLE_ID) return
+  if (bundleId === FINDER_BUNDLE_ID || bundleId === OWN_BUNDLE_ID) return
   try {
     await execFileAsync(OPEN_BIN, ['-b', bundleId])
   } catch (err) {
