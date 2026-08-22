@@ -28,8 +28,16 @@ export async function getFrontmostAppBundleId(): Promise<string | null> {
   }
 }
 
+// Clicking bare Desktop makes Finder the "active app" from macOS's
+// perspective, same as any real app — but it isn't a deliberate app context
+// a user wants restored to. Reactivating Finder when it has no open window
+// makes macOS spawn a new one (defaulting to its "Recents" gallery view),
+// which reads as an unwanted popup, not a focus restoration. Skip it.
+const FINDER_BUNDLE_ID = 'com.apple.finder'
+
 /** Re-activates a previously-frontmost app by bundle id (e.g. after Esc cancels a capture). */
 export async function activateApp(bundleId: string): Promise<void> {
+  if (bundleId === FINDER_BUNDLE_ID) return
   try {
     await execFileAsync(OPEN_BIN, ['-b', bundleId])
   } catch (err) {
