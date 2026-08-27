@@ -129,14 +129,6 @@ function hideTextStatus(): void {
   textStatus?.classList.remove('visible')
 }
 
-/** Always-visible "Copy All"/"Cancel" plus a "Copy Selection" that only shows once the user has actually highlighted something — the flow never depends on a keyboard-only shortcut the user has to already know about. */
-function showTextToolbar(rect: RectInPoints): void {
-  if (!textToolbar) return
-  textToolbar.classList.add('visible')
-  updateCopySelectionButtonVisibility()
-  positionBelowSelection(textToolbar, rect)
-}
-
 function hideTextToolbar(): void {
   textToolbar?.classList.remove('visible')
 }
@@ -377,7 +369,17 @@ function triggerCancel(): void {
   window.overlayApi.dismiss()
 }
 
-/** Universal Text Capture's result arriving from main (BUILD-SPEC.md §4.9) — the moment recognition finishes after mouse-up. */
+/**
+ * Universal Text Capture's result arriving from main (BUILD-SPEC.md §4.9) —
+ * the moment recognition finishes after mouse-up. Copies everything
+ * recognized and dismisses immediately, on direct request — no manual
+ * "Copy All" click required for the common case of "grab all the text in
+ * this area". textLayer's word-level highlight/"Copy Selection" machinery
+ * (mouse-drag re-selection, ⌘C on a partial highlight) is left in place
+ * further down in this file, not deleted — it's simply unreachable now that
+ * the overlay closes before any of it could run. Flagging rather than
+ * ripping it out: another session is actively building on this exact flow.
+ */
 function onTextCaptureResult(payload: TextCaptureResultPayload): void {
   hideTextStatus()
   if (payload.lines.length === 0 || !selection) {
@@ -388,9 +390,11 @@ function onTextCaptureResult(payload: TextCaptureResultPayload): void {
     return
   }
   textLayer.setResult(payload, selection)
-  if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'text'
-  showTextToolbar(selection)
-  render()
+  textLayer.selectAll()
+  window.overlayApi.copyTextCapture(textLayer.getSelectedText())
+  textLayer.clear()
+  selection = null
+  window.overlayApi.dismiss()
 }
 
 /** Copies whatever's currently highlighted. Falls back to selecting everything first when nothing's highlighted — used by both ⌘C and the "Copy Selection" button, so ⌘C always does something useful rather than silently no-op-ing. */
