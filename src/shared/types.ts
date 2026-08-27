@@ -71,6 +71,11 @@ export interface OverlayResizeStartPayload {
   handle: SelectionHandleId
 }
 
+/** Renderer -> main: the selection body was grabbed to reposition it (only fires when no annotation tool is active — see annotationToolbar.ts). `anchorInPoints` is the click point, in the sending window's own local points. */
+export interface OverlayMoveStartPayload {
+  anchorInPoints: PointInPoints
+}
+
 export type ShortcutActionId = 'captureArea' | 'captureFullScreen' | 'captureText'
 
 export type ShortcutBindings = Record<ShortcutActionId, string>

@@ -8,11 +8,12 @@ import {
 } from '../capture/displayManager'
 import { IPC } from '../ipc/channels'
 import { logger } from '../logger'
-import { computeDragRect, nudgeRect, rectIntersection, type Point, type Rect } from '../../shared/selectionMath'
+import { computeDragRect, nudgeRect, rectIntersection, translateRect, type Point, type Rect } from '../../shared/selectionMath'
 import type {
   DragModifiersPayload,
   OverlayDragModifiersPayload,
   OverlayDragStartPayload,
+  OverlayMoveStartPayload,
   OverlayResizeStartPayload,
   OverlaySelectionNudgePayload,
   OverlaySelectionStatePayload,
@@ -41,6 +42,10 @@ interface DragState {
   // Resize only (handleResizeStart) — a fresh drag-out never sets these.
   axisLock?: { axis: 'x' | 'y'; pinnedValueInPoints: number }
   minSizeInPoints?: number
+  // Move only (handleMoveStart) — translates this fixed-size rect by however
+  // far the cursor has moved since anchorInPoints, instead of computing a
+  // fresh rect from anchor-to-cursor like a drag-out or resize would.
+  moveOriginRectInPoints?: Rect
 }
 
 const DRAG_POLL_INTERVAL_MS = 16
@@ -142,7 +147,11 @@ function clampResizeMinSize(rect: Rect, anchor: Point, minSize: number): Rect {
  * one of the cursor's two axes to a fixed value before handing it to
  * `computeDragRect` makes that axis hold at its original size while the
  * other tracks the real cursor — exactly a corner-drag's math, just with one
- * axis disabled, so no separate resize formula is needed.
+ * axis disabled, so no separate resize formula is needed. Move
+ * (`moveOriginRectInPoints` set) skips `computeDragRect` entirely and
+ * translates that fixed-size rect by the cursor's delta from the anchor
+ * instead — a resize/drag-out anchor is a fixed POINT the rect grows from;
+ * a move's anchor is just the click's origin for measuring delta.
  */
 function advanceDragTick(displays: DisplayInfo[]): Rect {
   const state = dragState as DragState
@@ -154,6 +163,11 @@ function advanceDragTick(displays: DisplayInfo[]): Rect {
     }
   }
   state.lastCursorInPoints = cursor
+
+  if (state.moveOriginRectInPoints) {
+    return clampRectToVirtualDesktop(translateRect(state.moveOriginRectInPoints, state.anchorInPoints, cursor), displays)
+  }
+
   const effectiveCursor = state.axisLock ? { ...cursor, [state.axisLock.axis]: state.axisLock.pinnedValueInPoints } : cursor
   let rect = computeDragRect(state.anchorInPoints, effectiveCursor, state.modifiers)
   if (state.minSizeInPoints !== undefined) rect = clampResizeMinSize(rect, state.anchorInPoints, state.minSizeInPoints)
@@ -281,6 +295,39 @@ export function handleResizeStart(overlays: OverlayEntry[], _event: IpcMainEvent
     lastCursorInPoints: screen.getCursorScreenPoint(),
     axisLock,
     minSizeInPoints: MIN_RESIZE_SIZE_IN_POINTS,
+    pollTimer: setInterval(() => tickDrag(overlays), DRAG_POLL_INTERVAL_MS)
+  }
+  tickDrag(overlays)
+}
+
+/**
+ * The selection body was grabbed to reposition it — only sent by the
+ * renderer when no annotation tool is active (annotationToolbar.ts), since a
+ * click inside the body otherwise draws a shape there. Same cross-display
+ * polling machinery as resize/drag-out; `handleDragEnd` finalizes it
+ * identically once the mouse comes up.
+ */
+export function handleMoveStart(overlays: OverlayEntry[], event: IpcMainEvent, payload: OverlayMoveStartPayload): void {
+  if (!finalizedRectInPoints) return
+  const entry = overlays.find((o) => o.window.webContents === event.sender)
+  if (!entry) {
+    logger.error('Received a move-start from an overlay window not in the pool.')
+    return
+  }
+  const origin = originForDisplayId(entry.displayId, currentDisplayInfos())
+  if (!origin) {
+    logger.error(`No display found for overlay window's displayId ${entry.displayId}; cannot start a move without a known origin.`)
+    return
+  }
+  const anchorInPoints = overlayLocalPointToGlobalPoint(origin, payload.anchorInPoints)
+  const moveOriginRectInPoints = finalizedRectInPoints
+  if (dragState) clearInterval(dragState.pollTimer)
+  finalizedRectInPoints = null
+  dragState = {
+    anchorInPoints,
+    modifiers: { square: false, fromCenter: false, space: false },
+    lastCursorInPoints: anchorInPoints,
+    moveOriginRectInPoints,
     pollTimer: setInterval(() => tickDrag(overlays), DRAG_POLL_INTERVAL_MS)
   }
   tickDrag(overlays)

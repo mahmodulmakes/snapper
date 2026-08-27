@@ -51,6 +51,9 @@ const mods = { shift: false, option: false, space: false }
 // main uses for a fresh drag-out (dragCoordinator.ts's handleResizeStart),
 // just anchored at the opposite corner/edge instead of the click point.
 let resizingHandle: SelectionHandleId | null = null
+// Set while the selection body itself is being dragged to reposition it —
+// only starts when no annotation tool is active (annotationToolbar.ts).
+let moving = false
 const HANDLE_SIZE = 6
 const HANDLE_HIT_RADIUS = 7
 const HANDLE_CURSORS: Record<SelectionHandleId, string> = {
@@ -246,6 +249,7 @@ function resetSelectionState(payload: OverlayResetPayload): void {
   textDragging = false
   shapeDrawing = false
   resizingHandle = null
+  moving = false
   liveRect = null
   selection = null
   isToolbarHost = false
@@ -266,7 +270,7 @@ function resetSelectionState(payload: OverlayResetPayload): void {
 
 /** Magnifier loupe (BUILD-SPEC.md §4.2 step 3) — idle only, see magnifier.ts's header comment. */
 function onIdleMouseMove(event: MouseEvent): void {
-  if (dragging || selection || resizingHandle) return
+  if (dragging || selection || resizingHandle || moving) return
   updateMagnifier(event.clientX, event.clientY)
 }
 
@@ -285,9 +289,15 @@ function onMouseMove(event: MouseEvent): void {
   if (captureMode === 'text' && textLayer.isActive() && !dragging && canvas instanceof HTMLCanvasElement) {
     canvas.style.cursor = textLayer.containsPoint(event.clientX, event.clientY) ? 'text' : 'default'
   }
-  if (captureMode === 'region' && isToolbarHost && selection && !resizingHandle && canvas instanceof HTMLCanvasElement) {
+  if (captureMode === 'region' && isToolbarHost && selection && !resizingHandle && !moving && canvas instanceof HTMLCanvasElement) {
     const handle = hitTestHandle(event.clientX, event.clientY, selection)
-    canvas.style.cursor = handle ? HANDLE_CURSORS[handle] : 'crosshair'
+    if (handle) {
+      canvas.style.cursor = HANDLE_CURSORS[handle]
+    } else if (pointInRect(event.clientX, event.clientY, selection)) {
+      canvas.style.cursor = annotationToolbar.getActiveTool() ? 'crosshair' : 'move'
+    } else {
+      canvas.style.cursor = 'crosshair'
+    }
   }
   onIdleMouseMove(event)
 }
@@ -322,15 +332,27 @@ function onMouseDown(event: MouseEvent): void {
   }
 
   // Inline annotation (BUILD-SPEC.md §2.4.2): once a region is finalized, a
-  // click INSIDE it draws a shape with whatever tool/color is active,
-  // instead of starting a brand new selection — a click OUTSIDE it still
-  // starts over, same as before.
+  // click INSIDE it draws a shape with whatever tool/color is active — but
+  // only when a tool IS active. No tool selected by default (see
+  // annotationToolbar.ts), so a plain click-drag here instead repositions
+  // the whole selection, matching Lightshot. A click OUTSIDE it still starts
+  // a brand new selection either way.
   if (captureMode === 'region' && selection && pointInRect(event.clientX, event.clientY, selection)) {
-    shapeDrawing = true
     const tool = annotationToolbar.getActiveTool()
-    const color = annotationToolbar.getActiveColor()
-    drawingShape = { tool, color, x0: event.clientX, y0: event.clientY, x1: event.clientX, y1: event.clientY }
-    render()
+    if (tool) {
+      shapeDrawing = true
+      const color = annotationToolbar.getActiveColor()
+      drawingShape = { tool, color, x0: event.clientX, y0: event.clientY, x1: event.clientX, y1: event.clientY }
+      render()
+      return
+    }
+
+    moving = true
+    if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'move'
+    hideToolbar()
+    annotationToolbar.hide()
+    hideLoupe()
+    window.overlayApi.startMove({ x: event.clientX, y: event.clientY })
     return
   }
 
@@ -352,6 +374,12 @@ function onMouseDown(event: MouseEvent): void {
 function onMouseUp(): void {
   if (resizingHandle) {
     resizingHandle = null
+    if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'crosshair'
+    window.overlayApi.endDrag()
+    return
+  }
+  if (moving) {
+    moving = false
     if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'crosshair'
     window.overlayApi.endDrag()
     return
@@ -461,6 +489,7 @@ function triggerCancel(): void {
   shapes = []
   drawingShape = null
   resizingHandle = null
+  moving = false
   window.overlayApi.dismiss()
 }
 

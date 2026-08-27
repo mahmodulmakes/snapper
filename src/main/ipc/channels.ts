@@ -11,6 +11,7 @@ export const IPC = {
   OVERLAY_SELECTION_NUDGE: 'overlay:selection-nudge',
   OVERLAY_SELECTION_REDO: 'overlay:selection-redo',
   OVERLAY_RESIZE_START: 'overlay:resize-start',
+  OVERLAY_MOVE_START: 'overlay:move-start',
   OVERLAY_GET_CAPTURE_SOURCE_ID: 'overlay:get-capture-source-id',
   ONBOARDING_OPEN_SETTINGS: 'onboarding:open-settings',
   ONBOARDING_RESTART: 'onboarding:restart',

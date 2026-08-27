@@ -4,6 +4,7 @@ import type {
   AnnotationShape,
   DragModifiersPayload,
   OverlayExportPayload,
+  OverlayMoveStartPayload,
   OverlayResetPayload,
   OverlayResizeStartPayload,
   OverlaySelectionStatePayload,
@@ -39,6 +40,9 @@ contextBridge.exposeInMainWorld('overlayApi', {
   redoSelection: (): void => ipcRenderer.send(IPC.OVERLAY_SELECTION_REDO),
   startResize: (handle: SelectionHandleId): void => {
     ipcRenderer.send(IPC.OVERLAY_RESIZE_START, { handle } satisfies OverlayResizeStartPayload)
+  },
+  startMove: (anchorInPoints: PointInPoints): void => {
+    ipcRenderer.send(IPC.OVERLAY_MOVE_START, { anchorInPoints } satisfies OverlayMoveStartPayload)
   },
   getCaptureSourceId: (): Promise<string | null> => ipcRenderer.invoke(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID),
   onTextCaptureResult: (callback: (payload: TextCaptureResultPayload) => void): void => {

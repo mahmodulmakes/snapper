@@ -21,6 +21,7 @@ export interface OverlayApi {
   nudgeSelection: (dx: number, dy: number) => void
   redoSelection: () => void
   startResize: (handle: SelectionHandleId) => void
+  startMove: (anchorInPoints: PointInPoints) => void
   getCaptureSourceId: () => Promise<string | null>
   onTextCaptureResult: (callback: (payload: TextCaptureResultPayload) => void) => void
   copyTextCapture: (text: string) => void

@@ -15,9 +15,13 @@ const colorToggle = document.getElementById('annotation-color-toggle')
 const colorSwatch = document.getElementById('annotation-color-swatch')
 const undoButton = document.getElementById('annotation-undo')
 
-let activeTool: AnnotationTool = 'arrow'
+// No tool active by default — a plain click inside the selection moves it
+// (see main.ts's mousedown handling) rather than drawing, until the user
+// explicitly picks a tool. Picking the already-active tool again deselects
+// it, back to move mode.
+let activeTool: AnnotationTool | null = null
 let activeColor = DEFAULT_COLOR
-let onToolChange: ((tool: AnnotationTool) => void) | null = null
+let onToolChange: ((tool: AnnotationTool | null) => void) | null = null
 let onColorChange: ((color: string) => void) | null = null
 let onUndo: (() => void) | null = null
 
@@ -37,9 +41,9 @@ function updateColorSwatch(): void {
 }
 
 function selectTool(tool: AnnotationTool): void {
-  activeTool = tool
+  activeTool = activeTool === tool ? null : tool
   updateToolButtonStates()
-  onToolChange?.(tool)
+  onToolChange?.(activeTool)
 }
 
 function selectColor(color: string): void {
@@ -72,7 +76,7 @@ function buildColorPopover(): void {
 
 /** Wires every click handler once, at module load — call before `show()`. */
 export function init(handlers: {
-  onToolChange: (tool: AnnotationTool) => void
+  onToolChange: (tool: AnnotationTool | null) => void
   onColorChange: (color: string) => void
   onUndo: () => void
 }): void {
@@ -93,7 +97,7 @@ export function init(handlers: {
 /** Positions and reveals the toolbar at the selection's right edge, flipping to the left edge if it would go off-screen. Resets to the default tool/color for a fresh selection. */
 export function show(rect: RectInPoints, boundsWidth: number, boundsHeight: number): void {
   if (!container) return
-  activeTool = 'arrow'
+  activeTool = null
   activeColor = DEFAULT_COLOR
   updateToolButtonStates()
   updateColorSwatch()
@@ -119,7 +123,7 @@ export function hide(): void {
   colorPopover?.classList.remove('visible')
 }
 
-export function getActiveTool(): AnnotationTool {
+export function getActiveTool(): AnnotationTool | null {
   return activeTool
 }
 
