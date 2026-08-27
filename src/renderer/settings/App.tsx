@@ -138,8 +138,11 @@ export default function App(): JSX.Element {
       <section className="mb-4 rounded-lg border border-neutral-800 p-4">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">General</h2>
 
-        <div className="flex items-center justify-between py-1.5">
-          <span className="text-sm text-neutral-200">Launch at login</span>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-neutral-200">Launch at login</div>
+            <div className="mt-0.5 text-xs text-neutral-500">Automatically start Snapper when you log in.</div>
+          </div>
           <Toggle
             checked={state.launchAtLogin}
             onChange={(enabled) => {
@@ -149,10 +152,12 @@ export default function App(): JSX.Element {
             label="Launch at login"
           />
         </div>
-        <p className="mt-1 text-xs text-neutral-500">Automatically start Snapper when you log in.</p>
 
-        <div className="mt-3 flex items-center justify-between py-1.5">
-          <span className="text-sm text-neutral-200">Pause shortcuts</span>
+        <div className="mt-4 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-neutral-200">Pause shortcuts</div>
+            <div className="mt-0.5 text-xs text-neutral-500">Temporarily disable every capture shortcut.</div>
+          </div>
           <Toggle
             checked={state.shortcutsPaused}
             onChange={(paused) => {
@@ -162,7 +167,6 @@ export default function App(): JSX.Element {
             label="Pause shortcuts"
           />
         </div>
-        <p className="mt-1 text-xs text-neutral-500">Temporarily disable every capture shortcut.</p>
       </section>
 
       <section className="mb-4 rounded-lg border border-neutral-800 p-4">
