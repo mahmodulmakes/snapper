@@ -5,6 +5,7 @@ import type {
   OverlaySelectionStatePayload,
   PointInPoints,
   RectInPoints,
+  SelectionHandleId,
   TextCaptureResultPayload
 } from '../../shared/types'
 
@@ -19,6 +20,7 @@ export interface OverlayApi {
   onSelectionState: (callback: (payload: OverlaySelectionStatePayload) => void) => void
   nudgeSelection: (dx: number, dy: number) => void
   redoSelection: () => void
+  startResize: (handle: SelectionHandleId) => void
   getCaptureSourceId: () => Promise<string | null>
   onTextCaptureResult: (callback: (payload: TextCaptureResultPayload) => void) => void
   copyTextCapture: (text: string) => void

@@ -15,6 +15,7 @@ import type {
   OverlaySelectionStatePayload,
   PointInPoints,
   RectInPoints,
+  SelectionHandleId,
   TextCaptureResultPayload
 } from '../../shared/types'
 
@@ -44,6 +45,63 @@ let saveToDisk = true
 let shapes: AnnotationShape[] = []
 let drawingShape: AnnotationShape | null = null
 const mods = { shift: false, option: false, space: false }
+
+// Resize handles on a finalized region selection — the 4 corners + 4 edge
+// midpoints. Grabbing one starts the same cross-display cursor-polling drag
+// main uses for a fresh drag-out (dragCoordinator.ts's handleResizeStart),
+// just anchored at the opposite corner/edge instead of the click point.
+let resizingHandle: SelectionHandleId | null = null
+const HANDLE_SIZE = 6
+const HANDLE_HIT_RADIUS = 7
+const HANDLE_CURSORS: Record<SelectionHandleId, string> = {
+  nw: 'nwse-resize',
+  se: 'nwse-resize',
+  ne: 'nesw-resize',
+  sw: 'nesw-resize',
+  n: 'ns-resize',
+  s: 'ns-resize',
+  e: 'ew-resize',
+  w: 'ew-resize'
+}
+
+function handlePositions(rect: RectInPoints): Record<SelectionHandleId, PointInPoints> {
+  const midX = rect.x + rect.width / 2
+  const midY = rect.y + rect.height / 2
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+  return {
+    nw: { x: rect.x, y: rect.y },
+    n: { x: midX, y: rect.y },
+    ne: { x: right, y: rect.y },
+    e: { x: right, y: midY },
+    se: { x: right, y: bottom },
+    s: { x: midX, y: bottom },
+    sw: { x: rect.x, y: bottom },
+    w: { x: rect.x, y: midY }
+  }
+}
+
+function hitTestHandle(x: number, y: number, rect: RectInPoints): SelectionHandleId | null {
+  const positions = handlePositions(rect)
+  for (const id of Object.keys(positions) as SelectionHandleId[]) {
+    const p = positions[id]
+    if (Math.abs(x - p.x) <= HANDLE_HIT_RADIUS && Math.abs(y - p.y) <= HANDLE_HIT_RADIUS) return id
+  }
+  return null
+}
+
+function drawHandles(ctx: CanvasRenderingContext2D, rect: RectInPoints): void {
+  const positions = handlePositions(rect)
+  const half = HANDLE_SIZE / 2
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = '#3b82f6'
+  ctx.lineWidth = 1
+  for (const id of Object.keys(positions) as SelectionHandleId[]) {
+    const p = positions[id]
+    ctx.fillRect(p.x - half, p.y - half, HANDLE_SIZE, HANDLE_SIZE)
+    ctx.strokeRect(Math.round(p.x - half) + 0.5, Math.round(p.y - half) + 0.5, HANDLE_SIZE - 1, HANDLE_SIZE - 1)
+  }
+}
 
 function bounds(): { width: number; height: number } {
   return { width: window.innerWidth, height: window.innerHeight }
@@ -114,6 +172,10 @@ function render(): void {
   if (captureMode === 'region') {
     for (const shape of shapes) drawAnnotationShape(ctx, shape)
     if (drawingShape) drawAnnotationShape(ctx, drawingShape)
+    // selection (not liveRect) being set already means this is the finalized,
+    // non-dragging state — see onSelectionState, which always nulls exactly
+    // one of the two.
+    if (isToolbarHost && selection) drawHandles(ctx, selection)
   }
 }
 
@@ -183,6 +245,7 @@ function resetSelectionState(payload: OverlayResetPayload): void {
   dragging = false
   textDragging = false
   shapeDrawing = false
+  resizingHandle = null
   liveRect = null
   selection = null
   isToolbarHost = false
@@ -203,7 +266,7 @@ function resetSelectionState(payload: OverlayResetPayload): void {
 
 /** Magnifier loupe (BUILD-SPEC.md §4.2 step 3) — idle only, see magnifier.ts's header comment. */
 function onIdleMouseMove(event: MouseEvent): void {
-  if (dragging || selection) return
+  if (dragging || selection || resizingHandle) return
   updateMagnifier(event.clientX, event.clientY)
 }
 
@@ -222,6 +285,10 @@ function onMouseMove(event: MouseEvent): void {
   if (captureMode === 'text' && textLayer.isActive() && !dragging && canvas instanceof HTMLCanvasElement) {
     canvas.style.cursor = textLayer.containsPoint(event.clientX, event.clientY) ? 'text' : 'default'
   }
+  if (captureMode === 'region' && isToolbarHost && selection && !resizingHandle && canvas instanceof HTMLCanvasElement) {
+    const handle = hitTestHandle(event.clientX, event.clientY, selection)
+    canvas.style.cursor = handle ? HANDLE_CURSORS[handle] : 'crosshair'
+  }
   onIdleMouseMove(event)
 }
 
@@ -236,6 +303,22 @@ function onMouseDown(event: MouseEvent): void {
     updateCopySelectionButtonVisibility()
     render()
     return
+  }
+
+  // Resize handles take priority over inline annotation below — a click
+  // exactly on a corner/edge handle resizes the selection instead of
+  // drawing a shape there.
+  if (captureMode === 'region' && isToolbarHost && selection) {
+    const handle = hitTestHandle(event.clientX, event.clientY, selection)
+    if (handle) {
+      resizingHandle = handle
+      if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = HANDLE_CURSORS[handle]
+      hideToolbar()
+      annotationToolbar.hide()
+      hideLoupe()
+      window.overlayApi.startResize(handle)
+      return
+    }
   }
 
   // Inline annotation (BUILD-SPEC.md §2.4.2): once a region is finalized, a
@@ -267,6 +350,12 @@ function onMouseDown(event: MouseEvent): void {
 }
 
 function onMouseUp(): void {
+  if (resizingHandle) {
+    resizingHandle = null
+    if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'crosshair'
+    window.overlayApi.endDrag()
+    return
+  }
   if (shapeDrawing) {
     shapeDrawing = false
     if (drawingShape && !isDegenerateShape(drawingShape)) {
@@ -371,6 +460,7 @@ function triggerCancel(): void {
   liveRect = null
   shapes = []
   drawingShape = null
+  resizingHandle = null
   window.overlayApi.dismiss()
 }
 

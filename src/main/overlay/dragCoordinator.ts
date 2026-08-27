@@ -13,8 +13,10 @@ import type {
   DragModifiersPayload,
   OverlayDragModifiersPayload,
   OverlayDragStartPayload,
+  OverlayResizeStartPayload,
   OverlaySelectionNudgePayload,
-  OverlaySelectionStatePayload
+  OverlaySelectionStatePayload,
+  SelectionHandleId
 } from '../../shared/types'
 
 // Cross-display drag coordination (BUILD-SPEC.md §4.2 done-when criterion).
@@ -36,9 +38,17 @@ interface DragState {
   modifiers: DragModifiersPayload
   lastCursorInPoints: Point // global, updated every tick — drives Space-to-pan
   pollTimer: ReturnType<typeof setInterval>
+  // Resize only (handleResizeStart) — a fresh drag-out never sets these.
+  axisLock?: { axis: 'x' | 'y'; pinnedValueInPoints: number }
+  minSizeInPoints?: number
 }
 
 const DRAG_POLL_INTERVAL_MS = 16
+// A fresh drag-out can legitimately shrink to nothing (canceling the
+// selection, per finalizeSelection's width/height >= 2 check) — but a resize
+// handle grabbed on an existing selection shouldn't be able to drag it into
+// that same degenerate state; it should just stop shrinking.
+const MIN_RESIZE_SIZE_IN_POINTS = 10
 
 let dragState: DragState | null = null
 let finalizedRectInPoints: Rect | null = null // global
@@ -99,12 +109,40 @@ function broadcastSelectionState(
 }
 
 /**
+ * A resize handle can only ever shrink the ONE axis it's meant to shrink
+ * (see `anchorForHandle` — the other axis's cursor coordinate is already
+ * pinned so `computeDragRect` holds it exactly at the original size). Keeps
+ * that axis's edge from crossing the anchor into degeneracy by clamping the
+ * size and re-deriving position from whichever side is actually anchored —
+ * `x === anchor.x` is an exact comparison, not approximate: `computeDragRect`
+ * assigns one of those two values verbatim, never a derived one.
+ */
+function clampResizeMinSize(rect: Rect, anchor: Point, minSize: number): Rect {
+  let { x, y, width, height } = rect
+  if (width < minSize) {
+    x = x === anchor.x ? anchor.x : anchor.x - minSize
+    width = minSize
+  }
+  if (height < minSize) {
+    y = y === anchor.y ? anchor.y : anchor.y - minSize
+    height = minSize
+  }
+  return { x, y, width, height }
+}
+
+/**
  * Reads the cursor, applies Space-to-pan (shifts the anchor by however far
  * the cursor moved since the last tick, keeping the anchor-to-cursor vector
  * — and thus the rect's size — constant while its position follows the
  * cursor, mirroring what the renderer used to do locally with mousemove
  * deltas), and returns the resulting rect. Only valid while dragState is set
  * (tickDrag/handleDragEnd both guard).
+ *
+ * Resize (`axisLock` set) reuses this same tick instead of its own: pinning
+ * one of the cursor's two axes to a fixed value before handing it to
+ * `computeDragRect` makes that axis hold at its original size while the
+ * other tracks the real cursor — exactly a corner-drag's math, just with one
+ * axis disabled, so no separate resize formula is needed.
  */
 function advanceDragTick(displays: DisplayInfo[]): Rect {
   const state = dragState as DragState
@@ -116,7 +154,10 @@ function advanceDragTick(displays: DisplayInfo[]): Rect {
     }
   }
   state.lastCursorInPoints = cursor
-  return clampRectToVirtualDesktop(computeDragRect(state.anchorInPoints, cursor, state.modifiers), displays)
+  const effectiveCursor = state.axisLock ? { ...cursor, [state.axisLock.axis]: state.axisLock.pinnedValueInPoints } : cursor
+  let rect = computeDragRect(state.anchorInPoints, effectiveCursor, state.modifiers)
+  if (state.minSizeInPoints !== undefined) rect = clampResizeMinSize(rect, state.anchorInPoints, state.minSizeInPoints)
+  return clampRectToVirtualDesktop(rect, displays)
 }
 
 function tickDrag(overlays: OverlayEntry[]): void {
@@ -184,6 +225,64 @@ export function handleDragStart(overlays: OverlayEntry[], event: IpcMainEvent, p
 export function handleDragModifiers(overlays: OverlayEntry[], payload: OverlayDragModifiersPayload): void {
   if (!dragState) return
   dragState.modifiers = payload.modifiers
+  tickDrag(overlays)
+}
+
+/**
+ * For each handle: the anchor is the OPPOSITE corner/edge of the current
+ * rect (the point that must stay fixed), and `axisLock` — only set for the 4
+ * edge-midpoint handles, which may only change one dimension — pins the
+ * cursor's other axis to the anchor's own value on that axis, so
+ * `computeDragRect`'s width/height on that axis comes out exactly unchanged.
+ * Corner handles need no lock: both axes are meant to move together.
+ */
+function anchorForHandle(handle: SelectionHandleId, rect: Rect): Pick<DragState, 'anchorInPoints' | 'axisLock'> {
+  const left = rect.x
+  const top = rect.y
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+  switch (handle) {
+    case 'nw':
+      return { anchorInPoints: { x: right, y: bottom } }
+    case 'ne':
+      return { anchorInPoints: { x: left, y: bottom } }
+    case 'sw':
+      return { anchorInPoints: { x: right, y: top } }
+    case 'se':
+      return { anchorInPoints: { x: left, y: top } }
+    case 'n':
+      return { anchorInPoints: { x: left, y: bottom }, axisLock: { axis: 'x', pinnedValueInPoints: right } }
+    case 's':
+      return { anchorInPoints: { x: left, y: top }, axisLock: { axis: 'x', pinnedValueInPoints: right } }
+    case 'e':
+      return { anchorInPoints: { x: left, y: top }, axisLock: { axis: 'y', pinnedValueInPoints: bottom } }
+    case 'w':
+      return { anchorInPoints: { x: right, y: top }, axisLock: { axis: 'y', pinnedValueInPoints: bottom } }
+  }
+}
+
+/**
+ * A resize handle grabbed on the finalized selection (Settings-independent —
+ * this is the region-capture toolbar's own selection-adjustment gesture, not
+ * anything from BUILD-SPEC.md). Reuses the exact same cross-display
+ * cursor-polling machinery as a fresh drag-out (`handleDragStart`/`tickDrag`)
+ * so a resize that grows the selection onto another display behaves
+ * correctly for free — `handleDragEnd` finalizes it exactly like a normal
+ * drag once the mouse comes up, no separate end handler needed.
+ */
+export function handleResizeStart(overlays: OverlayEntry[], _event: IpcMainEvent, payload: OverlayResizeStartPayload): void {
+  if (!finalizedRectInPoints) return
+  const { anchorInPoints, axisLock } = anchorForHandle(payload.handle, finalizedRectInPoints)
+  if (dragState) clearInterval(dragState.pollTimer)
+  finalizedRectInPoints = null
+  dragState = {
+    anchorInPoints,
+    modifiers: { square: false, fromCenter: false, space: false },
+    lastCursorInPoints: screen.getCursorScreenPoint(),
+    axisLock,
+    minSizeInPoints: MIN_RESIZE_SIZE_IN_POINTS,
+    pollTimer: setInterval(() => tickDrag(overlays), DRAG_POLL_INTERVAL_MS)
+  }
   tickDrag(overlays)
 }
 

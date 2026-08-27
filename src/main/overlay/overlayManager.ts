@@ -19,6 +19,7 @@ import {
   handleDragEnd,
   handleDragModifiers,
   handleDragStart,
+  handleResizeStart,
   handleSelectionNudge,
   handleSelectionRedo,
   resetDragState,
@@ -286,6 +287,7 @@ export function initOverlayWindows(): void {
     })
     ipcMain.on(IPC.OVERLAY_SELECTION_NUDGE, (_event, payload) => handleSelectionNudge(overlays, payload))
     ipcMain.on(IPC.OVERLAY_SELECTION_REDO, () => handleSelectionRedo(overlays))
+    ipcMain.on(IPC.OVERLAY_RESIZE_START, (event, payload) => handleResizeStart(overlays, event, payload))
     ipcMain.on(IPC.TEXT_CAPTURE_COPY, handleTextCaptureCopy)
     ipcMain.handle(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID, handleGetCaptureSourceId)
     listenersRegistered = true
@@ -304,6 +306,7 @@ export function teardownOverlayWindows(): void {
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_END)
   ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_NUDGE)
   ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_REDO)
+  ipcMain.removeAllListeners(IPC.OVERLAY_RESIZE_START)
   ipcMain.removeAllListeners(IPC.TEXT_CAPTURE_COPY)
   ipcMain.removeHandler(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID)
   listenersRegistered = false

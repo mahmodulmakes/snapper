@@ -63,6 +63,14 @@ export interface OverlaySelectionNudgePayload {
   dy: number
 }
 
+/** The 8 drag handles on a finalized region-capture selection: 4 corners + 4 edge midpoints. */
+export type SelectionHandleId = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
+
+/** Renderer -> main: a resize handle was grabbed (host window only) — starts the same cross-display cursor-polling drag used for the initial drag-out, anchored at the opposite corner/edge instead of the click point. */
+export interface OverlayResizeStartPayload {
+  handle: SelectionHandleId
+}
+
 export type ShortcutActionId = 'captureArea' | 'captureFullScreen' | 'captureText'
 
 export type ShortcutBindings = Record<ShortcutActionId, string>

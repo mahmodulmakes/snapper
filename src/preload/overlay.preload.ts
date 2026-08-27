@@ -5,9 +5,11 @@ import type {
   DragModifiersPayload,
   OverlayExportPayload,
   OverlayResetPayload,
+  OverlayResizeStartPayload,
   OverlaySelectionStatePayload,
   PointInPoints,
   RectInPoints,
+  SelectionHandleId,
   TextCaptureResultPayload
 } from '../shared/types'
 
@@ -35,6 +37,9 @@ contextBridge.exposeInMainWorld('overlayApi', {
     ipcRenderer.send(IPC.OVERLAY_SELECTION_NUDGE, { dx, dy })
   },
   redoSelection: (): void => ipcRenderer.send(IPC.OVERLAY_SELECTION_REDO),
+  startResize: (handle: SelectionHandleId): void => {
+    ipcRenderer.send(IPC.OVERLAY_RESIZE_START, { handle } satisfies OverlayResizeStartPayload)
+  },
   getCaptureSourceId: (): Promise<string | null> => ipcRenderer.invoke(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID),
   onTextCaptureResult: (callback: (payload: TextCaptureResultPayload) => void): void => {
     ipcRenderer.on(IPC.TEXT_CAPTURE_RESULT, (_event, payload: TextCaptureResultPayload) => callback(payload))
