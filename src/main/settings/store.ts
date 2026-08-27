@@ -44,7 +44,7 @@ export function getSettingsStore(): Store<SettingsSchema> {
         launchAtLogin: true,
         shortcuts: DEFAULT_SHORTCUTS,
         shortcutsPaused: false,
-        saveToDisk: true,
+        saveToDisk: false,
         saveDirectory: defaultSaveDirectory()
       }
     })
