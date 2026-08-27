@@ -37,7 +37,6 @@ contextBridge.exposeInMainWorld('overlayApi', {
   nudgeSelection: (dx: number, dy: number): void => {
     ipcRenderer.send(IPC.OVERLAY_SELECTION_NUDGE, { dx, dy })
   },
-  redoSelection: (): void => ipcRenderer.send(IPC.OVERLAY_SELECTION_REDO),
   startResize: (handle: SelectionHandleId): void => {
     ipcRenderer.send(IPC.OVERLAY_RESIZE_START, { handle } satisfies OverlayResizeStartPayload)
   },

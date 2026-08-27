@@ -489,12 +489,6 @@ function undoLastShape(): void {
   render()
 }
 
-function triggerRedo(): void {
-  hideToolbar()
-  annotationToolbar.hide()
-  window.overlayApi.redoSelection()
-}
-
 function triggerCancel(): void {
   // Reset local state immediately rather than relying solely on the next
   // OVERLAY_RESET (which only fires right before the window is shown again)
@@ -662,7 +656,6 @@ if (canvas instanceof HTMLCanvasElement) {
 
   document.getElementById('toolbar-copy')?.addEventListener('click', triggerCopy)
   document.getElementById('toolbar-save')?.addEventListener('click', triggerSave)
-  document.getElementById('toolbar-redo')?.addEventListener('click', triggerRedo)
   document.getElementById('toolbar-cancel')?.addEventListener('click', triggerCancel)
 
   document.getElementById('text-toolbar-copy-all')?.addEventListener('click', triggerTextCopyAll)

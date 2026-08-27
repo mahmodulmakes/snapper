@@ -22,7 +22,6 @@ import {
   handleMoveStart,
   handleResizeStart,
   handleSelectionNudge,
-  handleSelectionRedo,
   resetDragState,
   type OverlayEntry
 } from './dragCoordinator'
@@ -287,7 +286,6 @@ export function initOverlayWindows(): void {
       }
     })
     ipcMain.on(IPC.OVERLAY_SELECTION_NUDGE, (_event, payload) => handleSelectionNudge(overlays, payload))
-    ipcMain.on(IPC.OVERLAY_SELECTION_REDO, () => handleSelectionRedo(overlays))
     ipcMain.on(IPC.OVERLAY_RESIZE_START, (event, payload) => handleResizeStart(overlays, event, payload))
     ipcMain.on(IPC.OVERLAY_MOVE_START, (event, payload) => handleMoveStart(overlays, event, payload))
     ipcMain.on(IPC.TEXT_CAPTURE_COPY, handleTextCaptureCopy)
@@ -307,7 +305,6 @@ export function teardownOverlayWindows(): void {
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_MODIFIERS)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_END)
   ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_NUDGE)
-  ipcMain.removeAllListeners(IPC.OVERLAY_SELECTION_REDO)
   ipcMain.removeAllListeners(IPC.OVERLAY_RESIZE_START)
   ipcMain.removeAllListeners(IPC.OVERLAY_MOVE_START)
   ipcMain.removeAllListeners(IPC.TEXT_CAPTURE_COPY)

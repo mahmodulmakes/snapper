@@ -9,7 +9,6 @@ export const IPC = {
   OVERLAY_DRAG_END: 'overlay:drag-end',
   OVERLAY_SELECTION_STATE: 'overlay:selection-state',
   OVERLAY_SELECTION_NUDGE: 'overlay:selection-nudge',
-  OVERLAY_SELECTION_REDO: 'overlay:selection-redo',
   OVERLAY_RESIZE_START: 'overlay:resize-start',
   OVERLAY_MOVE_START: 'overlay:move-start',
   OVERLAY_GET_CAPTURE_SOURCE_ID: 'overlay:get-capture-source-id',

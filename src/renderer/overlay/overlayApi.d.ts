@@ -19,7 +19,6 @@ export interface OverlayApi {
   endDrag: () => void
   onSelectionState: (callback: (payload: OverlaySelectionStatePayload) => void) => void
   nudgeSelection: (dx: number, dy: number) => void
-  redoSelection: () => void
   startResize: (handle: SelectionHandleId) => void
   startMove: (anchorInPoints: PointInPoints) => void
   getCaptureSourceId: () => Promise<string | null>

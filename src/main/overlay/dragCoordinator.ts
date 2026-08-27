@@ -347,9 +347,3 @@ export function handleSelectionNudge(overlays: OverlayEntry[], payload: OverlayS
   if (!finalizedRectInPoints) return
   finalizeSelection(overlays, clampRectToVirtualDesktop(nudgeRect(finalizedRectInPoints, payload.dx, payload.dy), currentDisplayInfos()))
 }
-
-/** "Redo Selection" toolbar button — clears the finalized rect on every window, not just the host. */
-export function handleSelectionRedo(overlays: OverlayEntry[]): void {
-  finalizedRectInPoints = null
-  broadcastSelectionState(overlays, currentDisplayInfos(), 'finalized', null, null)
-}
