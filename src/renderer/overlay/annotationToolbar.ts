@@ -112,7 +112,9 @@ export function show(rect: RectInPoints, boundsWidth: number, boundsHeight: numb
   }
   left = Math.min(Math.max(left, 0), Math.max(0, boundsWidth - toolbarWidth))
 
-  const top = Math.min(Math.max(rect.y, 0), Math.max(0, boundsHeight - toolbarHeight))
+  // Bottom-aligned with the selection (Lightshot anchors its tool column to
+  // the bottom, not the top) — grows upward from the selection's bottom edge.
+  const top = Math.min(Math.max(rect.y + rect.height - toolbarHeight, 0), Math.max(0, boundsHeight - toolbarHeight))
 
   container.style.left = `${left}px`
   container.style.top = `${top}px`

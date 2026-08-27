@@ -234,10 +234,31 @@ function positionBelowSelection(el: HTMLElement, rect: RectInPoints): void {
   el.style.top = `${top}px`
 }
 
+/**
+ * Right-aligned with the selection's right edge, below it (flipped above if
+ * that would go offscreen) — matching Lightshot's bottom action bar, which
+ * hugs the bottom-right corner rather than centering. Deliberately its own
+ * function, not `positionBelowSelection`: that one's shared with Universal
+ * Text Capture's "Reading…" status, which should stay centered.
+ */
 function positionToolbar(rect: RectInPoints): void {
   if (!toolbar) return
   toolbar.classList.add('visible')
-  positionBelowSelection(toolbar, rect)
+  const toolbarWidth = toolbar.offsetWidth
+  const toolbarHeight = toolbar.offsetHeight
+  const gap = 8
+  const { width: boundsWidth, height: boundsHeight } = bounds()
+
+  let left = rect.x + rect.width - toolbarWidth
+  let top = rect.y + rect.height + gap
+  if (top + toolbarHeight > boundsHeight) {
+    top = rect.y - toolbarHeight - gap
+  }
+  top = Math.min(Math.max(top, 0), Math.max(0, boundsHeight - toolbarHeight))
+  left = Math.min(Math.max(left, 0), Math.max(0, boundsWidth - toolbarWidth))
+
+  toolbar.style.left = `${left}px`
+  toolbar.style.top = `${top}px`
 }
 
 function hideToolbar(): void {
