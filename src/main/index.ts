@@ -1,7 +1,6 @@
 import { app, screen, shell } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import { captureRectAndOutput } from './capture/captureService'
-import { teardownEditor } from './editor/editorWindow'
 import { defaultSaveDirectory } from './output/fileWriter'
 import { initOnboarding, showOnboardingWindow, teardownOnboarding } from './permissions/onboardingWindow'
 import { isScreenRecordingGranted } from './permissions/screenRecording'
@@ -11,7 +10,7 @@ import { syncLaunchAtLogin } from './settings/launchAtLogin'
 import { getSettingsStore } from './settings/store'
 import { initShortcuts, onShortcutStateChange, setShortcutsPaused, teardownShortcuts } from './shortcuts/shortcutManager'
 import { createTray, destroyTray, updateTrayMenu } from './tray/trayManager'
-import { initOverlayWindows, showOverlays, teardownOverlayWindows } from './overlay/overlayManager'
+import { initOverlayWindows, showOverlays, showOverlaysForTextCapture, teardownOverlayWindows } from './overlay/overlayManager'
 import { logger } from './logger'
 import { notifyFailure } from './notify'
 import type { TrayMenuHandlers, TrayMenuState } from './tray/menuBuilder'
@@ -29,6 +28,14 @@ function captureArea(): void {
   if (!requireScreenRecording()) return
   showOverlays().catch((err: unknown) => {
     logger.error('Could not show the capture overlay.', err)
+  })
+}
+
+/** Universal Text Capture's shortcut (BUILD-SPEC.md §4.9, beta track). */
+function captureText(): void {
+  if (!requireScreenRecording()) return
+  showOverlaysForTextCapture().catch((err: unknown) => {
+    logger.error('Could not show the text-capture overlay.', err)
   })
 }
 
@@ -115,7 +122,7 @@ if (!gotSingleInstanceLock) {
     initOnboarding()
     initSettingsIpc()
     syncLaunchAtLogin()
-    initShortcuts({ captureArea, captureFullScreen })
+    initShortcuts({ captureArea, captureFullScreen, captureText })
     onShortcutStateChange(() => updateTrayMenu(trayHandlers, currentTrayState()))
     if (!isScreenRecordingGranted()) {
       showOnboardingWindow()
@@ -143,6 +150,5 @@ if (!gotSingleInstanceLock) {
     teardownSettingsIpc()
     teardownShortcuts()
     closeSettingsWindow()
-    teardownEditor()
   })
 }

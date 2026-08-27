@@ -31,9 +31,20 @@ export default tseslint.config(
     }
   },
   {
-    // Throwaway Phase 0 spike scripts (CLAUDE.md "Working style" / BUILD-SPEC.md
+    // Throwaway Phase 0/8 spike scripts (CLAUDE.md "Working style" / BUILD-SPEC.md
     // §5) — not app code, console output is the whole point.
-    files: ['spikes/**/*.js'],
+    files: ['spikes/**/*.js', 'spikes/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node
+    },
+    rules: {
+      'no-console': 'off'
+    }
+  },
+  {
+    // Build tooling (scripts/buildPreloads.mjs, scripts/buildTextRecognizer.mjs)
+    // — real Node build scripts, not app code; console output is expected.
+    files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node
     },

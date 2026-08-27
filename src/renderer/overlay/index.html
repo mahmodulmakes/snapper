@@ -89,6 +89,167 @@
         border: 1px solid rgba(255, 255, 255, 0.5);
         flex-shrink: 0;
       }
+
+      /* Inline annotation toolbar (BUILD-SPEC.md §2.4.2/§4.5a) — a vertical
+         icon column anchored to the selection's right edge, Lightshot-style,
+         rather than a separate window. */
+      #annotation-toolbar {
+        position: fixed;
+        display: none;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px;
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        -webkit-user-select: none;
+      }
+      #annotation-toolbar.visible {
+        display: flex;
+      }
+      #annotation-toolbar button {
+        appearance: none;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: #d4d4d4;
+        padding: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #annotation-toolbar button svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #annotation-toolbar button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #f2f2f2;
+      }
+      #annotation-toolbar button.active {
+        background: #3b82f6;
+        color: #fff;
+      }
+      #annotation-toolbar button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      #annotation-toolbar hr {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        margin: 2px 4px;
+      }
+      #annotation-color-swatch {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255, 255, 255, 0.6);
+      }
+      #annotation-color-popover {
+        position: fixed;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+      }
+      #annotation-color-popover.visible {
+        display: flex;
+      }
+      #annotation-color-popover button {
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        cursor: pointer;
+      }
+      #annotation-color-popover button.active {
+        border-color: #fff;
+      }
+      #annotation-color-custom {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        background: transparent;
+      }
+
+      #text-status {
+        position: fixed;
+        display: none;
+        padding: 6px 12px;
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #f2f2f2;
+        -webkit-user-select: none;
+        pointer-events: none;
+      }
+      #text-status.visible {
+        display: block;
+      }
+
+      /* Universal Text Capture's toolbar (BUILD-SPEC.md §4.9) — appears once
+         recognition finishes. "Copy Selection" only shows once the user has
+         actually highlighted something; "Copy All" and "Cancel" are always
+         available so the flow never depends on a keyboard-only shortcut. */
+      #text-toolbar {
+        position: fixed;
+        display: none;
+        gap: 4px;
+        padding: 6px;
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        -webkit-user-select: none;
+      }
+      #text-toolbar.visible {
+        display: flex;
+      }
+      #text-toolbar button {
+        appearance: none;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: #f2f2f2;
+        font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      #text-toolbar button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      #text-toolbar button#text-toolbar-copy-all {
+        background: #3b82f6;
+        color: #fff;
+        font-weight: 600;
+      }
+      #text-toolbar button#text-toolbar-copy-all:hover {
+        background: #2f6fd6;
+      }
+      #text-toolbar button#text-toolbar-copy-selection.hidden {
+        display: none;
+      }
+      #text-toolbar button#text-toolbar-cancel {
+        color: #f87171;
+      }
     </style>
   </head>
   <body>
@@ -96,9 +257,37 @@
     <div id="toolbar">
       <button id="toolbar-copy" type="button">Copy</button>
       <button id="toolbar-save" type="button">Save</button>
-      <button id="toolbar-annotate" type="button">Annotate</button>
       <button id="toolbar-redo" type="button">Redo Selection</button>
       <button id="toolbar-cancel" type="button">Cancel</button>
+    </div>
+    <div id="annotation-toolbar">
+      <button id="tool-arrow" type="button" title="Arrow" aria-label="Arrow">
+        <svg viewBox="0 0 24 24"><path d="M4 20 L20 4 M20 4 L20 11 M20 4 L13 4" /></svg>
+      </button>
+      <button id="tool-rectangle" type="button" title="Box" aria-label="Box">
+        <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1" /></svg>
+      </button>
+      <button id="tool-oval" type="button" title="Oval" aria-label="Oval">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="6.5" /></svg>
+      </button>
+      <button id="tool-line" type="button" title="Line" aria-label="Line">
+        <svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="4" /></svg>
+      </button>
+      <hr />
+      <button id="annotation-undo" type="button" title="Undo" aria-label="Undo" disabled>
+        <svg viewBox="0 0 24 24"><path d="M9 8 L4 12 L9 16 M4 12 H15 A5 5 0 1 1 12 20.5" /></svg>
+      </button>
+      <hr />
+      <button id="annotation-color-toggle" type="button" title="Color" aria-label="Color">
+        <span id="annotation-color-swatch"></span>
+      </button>
+    </div>
+    <div id="annotation-color-popover"></div>
+    <div id="text-status"></div>
+    <div id="text-toolbar">
+      <button id="text-toolbar-copy-all" type="button">Copy All</button>
+      <button id="text-toolbar-copy-selection" type="button" class="hidden">Copy Selection</button>
+      <button id="text-toolbar-cancel" type="button">Cancel</button>
     </div>
     <div id="magnifier">
       <canvas id="magnifier-canvas" width="100" height="100"></canvas>

@@ -4,7 +4,8 @@ import { buildAccelerator, formatAcceleratorForDisplay, type ModifierState } fro
 
 const SHORTCUT_LABELS: Record<ShortcutActionId, string> = {
   captureArea: 'Capture Area',
-  captureFullScreen: 'Capture Full Screen'
+  captureFullScreen: 'Capture Full Screen',
+  captureText: 'Capture Text (beta)'
 }
 
 interface ShortcutRowProps {
@@ -130,6 +131,7 @@ export default function App(): JSX.Element {
         <div className="divide-y divide-neutral-800">
           <ShortcutRow id="captureArea" accelerator={state.shortcuts.captureArea} onRebind={rebind} />
           <ShortcutRow id="captureFullScreen" accelerator={state.shortcuts.captureFullScreen} onRebind={rebind} />
+          <ShortcutRow id="captureText" accelerator={state.shortcuts.captureText} onRebind={rebind} />
         </div>
 
         <label className="mt-3 flex items-center justify-between py-2">

@@ -42,6 +42,7 @@ const DRAG_POLL_INTERVAL_MS = 16
 
 let dragState: DragState | null = null
 let finalizedRectInPoints: Rect | null = null // global
+let finalizedHostDisplayId: number | null = null
 
 function currentDisplayInfos(): DisplayInfo[] {
   return screen.getAllDisplays().map((display) => ({
@@ -128,11 +129,23 @@ function finalizeSelection(overlays: OverlayEntry[], globalRect: Rect | null): v
   const displays = currentDisplayInfos()
   if (globalRect && globalRect.width >= 2 && globalRect.height >= 2) {
     finalizedRectInPoints = globalRect
-    broadcastSelectionState(overlays, displays, 'finalized', globalRect, determineToolbarHostDisplayId(overlays, displays, globalRect))
+    finalizedHostDisplayId = determineToolbarHostDisplayId(overlays, displays, globalRect)
+    broadcastSelectionState(overlays, displays, 'finalized', globalRect, finalizedHostDisplayId)
   } else {
     finalizedRectInPoints = null
+    finalizedHostDisplayId = null
     broadcastSelectionState(overlays, displays, 'finalized', null, null)
   }
+}
+
+/**
+ * The current finalized selection and which display hosts it — e.g. for
+ * Universal Text Capture (BUILD-SPEC.md §4.9), which needs the same
+ * host-display determination as the region-capture toolbar but reads it
+ * AFTER `handleDragEnd`, not via the toolbar's own IPC round-trip.
+ */
+export function getFinalizedSelection(): { rectInPoints: Rect; hostDisplayId: number | null } | null {
+  return finalizedRectInPoints ? { rectInPoints: finalizedRectInPoints, hostDisplayId: finalizedHostDisplayId } : null
 }
 
 /** Stops cursor polling and forgets the finalized rect. Safe to call any time, including when no drag is active. */
@@ -140,6 +153,7 @@ export function resetDragState(): void {
   if (dragState) clearInterval(dragState.pollTimer)
   dragState = null
   finalizedRectInPoints = null
+  finalizedHostDisplayId = null
 }
 
 /** Overlay renderer's mousedown (BUILD-SPEC.md §4.2) — starts main-process cursor polling so the live rect can be drawn across every touched display, not just the originating window. */

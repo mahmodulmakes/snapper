@@ -109,15 +109,16 @@ OCR was previously listed here as explicitly out of scope, gated on the (still-d
 - It stays compliant with Hard Rule 1 (no network beyond the update feed): recognition runs entirely on-device via Apple's Vision framework (`VNRecognizeTextRequest`), the same on-device tech behind macOS's own Live Text. No cloud OCR service, ever.
 - It introduces one new piece of native surface — a small compiled Swift helper the main process shells out to, living entirely inside `src/main/capture/` per Hard Rule 2 — see §3.10 and §4.9.
 
-### 2.4.2 Scope amendment — Minimal Inline Annotation (2026-08-27)
+### 2.4.2 Scope amendment — Minimal Inline Annotation (2026-08-27, revised same day)
 
-The annotation editor was previously deferred wholesale, gated on returning as the **full** non-destructive document model described in §4.5. **Partially superseded, at explicit user request.** A minimal inline annotation tool — arrows, rectangles, ovals, straight lines, and a color picker, drawn onto a captured screenshot before Copy/Save — is now in scope as its own lightweight track, independent of the full editor:
+The annotation editor was previously deferred wholesale, gated on returning as the **full** non-destructive document model described in §4.5. **Partially superseded, at explicit user request.** A minimal inline annotation tool — arrows, rectangles, ovals, straight lines, and a color picker — is now in scope as its own lightweight track, independent of the full editor:
 
-- It does **not** implement §4.5's non-destructive document model: no per-shape move/resize after placement, no layers, no crop, no blur/pixelate. Shapes are committed to an in-memory list as drawn, redrawn over the base image every frame, with a simple last-shape-only Undo — real until export, but not a full document model. That fuller model (and blur/pixelate, and crop) stays deferred exactly as before.
+- **Drawn directly on the region-capture overlay, not a separate window.** First built as its own editor `BrowserWindow` (opened by an "Annotate" toolbar button); revised same-day at explicit user request to match CleanShot-X/Lightshot-style tools — a vertical icon column anchored to the selection's right edge, live on the same transparent overlay used for dragging the selection, no page/window navigation. Copy and Save already carry whatever was drawn; there's no separate annotate step to opt into.
+- It does **not** implement §4.5's non-destructive document model: no per-shape move/resize after placement, no layers, no crop, no blur/pixelate. Shapes live in an in-memory list tied to the current finalized selection — any re-finalize (a new drag, an arrow-key nudge, Redo Selection) clears them, rather than trying to keep them positioned against a moved/resized rect. A simple last-shape-only Undo is real up until Copy/Save. That fuller model (and blur/pixelate, and crop) stays deferred exactly as before.
 - It does **not** unblock scrolling capture, history, or pin windows — those stay deferred.
 - Hard Rule 6 (blur/pixelate must be destructive on export) doesn't apply yet — this track has no redaction tool, only outline shapes. It must still be honored whenever blur/pixelate actually lands.
-- No new network access, no new permission, no dependency added (Hard Rule 9): color selection uses the native HTML `<input type="color">`, already bundled inside Chromium at zero cost, plus a small fixed swatch row.
-- New architectural surface: a real editor `BrowserWindow` (`main/editor/editorWindow.ts`), contextIsolation/sandbox/explicit preload per Hard Rule 4 — reusing the `src/renderer/editor/` + `src/preload/editor.preload.ts` scaffold that had sat as an unwired Phase-1 stub. See §4.10.
+- No new network access, no new permission, no dependency added (Hard Rule 9): color selection uses the native HTML `<input type="color">` plus a small fixed swatch row; shape rasterization onto the exported PNG uses `sharp`, already a project dependency (compositing an SVG overlay — no new package).
+- New architectural surface: `main/output/annotationOverlay.ts` rasterizes drawn shapes onto the captured PNG server-side (an SVG built from the shapes, composited via `sharp`, in the captured image's own pixel space) — the overlay renderer only ever sends shape coordinates, never pixel data, over IPC. Converting a shape endpoint from a global point into that pixel space is real `scaleFactor` math and lives in `displayManager.ts` per Hard Rule 3 (`globalPointToCapturePixels`), not in `captureService.ts` or the renderer. The `main/editor/` window and the `src/renderer/editor/`/`src/preload/editor.preload.ts` scaffold are NOT used for this — they're back to their original unwired Phase-1 stub state.
 
 ---
 
@@ -394,15 +395,15 @@ Requirements, if/when built:
 
 ### 4.5a Minimal inline annotation (in scope, §2.4.2)
 
-What actually gets built now. A lightweight alternative to §4.5 — no document model, no per-shape editing after placement, no blur/pixelate/crop/text/highlighter/counter-badge.
+What actually gets built now. A lightweight alternative to §4.5 — no document model, no per-shape editing after placement, no blur/pixelate/crop/text/highlighter/counter-badge, and no separate window: everything happens on the same overlay window used for dragging out the selection (CleanShot-X/Lightshot-style), not a page navigation.
 
-1. Region-selection toolbar (§4.3) gains an **Annotate** button alongside Copy/Save. Clicking it captures the selection to a temp file (same pipeline as Copy/Save) and opens a dedicated editor window instead of writing output immediately.
-2. Editor window: the captured image at native resolution, a tool row (**Arrow, Box, Oval, Line**), a color row (fixed swatches + a native `<input type="color">` for anything else), **Undo**, **Cancel**, **Save**, **Copy**.
-3. Draw by click-drag on the canvas. Shapes are kept as an in-memory list and redrawn over the base image every frame — Undo pops the last shape and redraws, so it's real up until export.
-4. **Copy**/**Save** flatten the canvas (base image + every shape) to a PNG and route through the existing clipboard/file-save code paths (`main/output/clipboard.ts`, `main/output/fileWriter.ts`). **Cancel** (or `Esc`, or the window's close button) discards the temp capture with no output.
-5. `⌘Z` undo, `⌘C` copy, `Esc` cancel — mirrors §4.5's shortcut spirit without the rest of that scope.
+1. Once a selection is finalized (§4.2), the toolbar-host overlay window shows both the existing horizontal Copy/Save/Redo Selection/Cancel toolbar (§4.3) AND a vertical icon column anchored to the selection's right edge (flipping to the left edge if it would go off-screen): **Arrow, Box, Oval, Line**, an **Undo** button, and a color swatch that opens a small popover (fixed swatches + a native `<input type="color">`).
+2. Click-drag *inside* the current selection with a tool active draws that shape, in the current color, directly on the transparent overlay canvas — visible immediately against the real screen showing through underneath, no captured image needed for the preview. Click-drag *outside* the selection still starts a brand new selection, same as before annotation existed.
+3. Shapes are kept as an in-memory list local to the renderer; Undo pops the last one and redraws. The list (and the active tool/color) resets whenever the selection re-finalizes — a new drag, a nudge, or Redo Selection — since shapes aren't tracked independently of the rect they were drawn on (§2.4.2's document-model exclusion).
+4. **Copy**/**Save** send the rect AND the shape list (in the overlay window's local points) to main. Main captures the real region via `screencapture` exactly as before, then — only if shapes were drawn — rasterizes them onto the captured PNG server-side: each shape's endpoints convert from local points → global points → the captured image's own pixel space (`displayManager.ts`'s `globalPointToCapturePixels`, Hard Rule 3), then an SVG built from the shapes is composited onto the PNG via `sharp` (`main/output/annotationOverlay.ts`) before it reaches the clipboard/file-save code paths (`main/output/clipboard.ts`, `main/output/fileWriter.ts`) unchanged. **Cancel**/`Esc` discard everything with no output, same as always.
+5. `⌘Z` undoes the last shape, `⌘C`/click Copy exports, `Esc` cancels — mirrors §4.5's shortcut spirit without the rest of that scope.
 
-Not built in this track: shape restyle-after-placement, layers, crop, text, blur/pixelate, per-tool style memory, unbounded undo. Any of those graduating in means graduating into §4.5's full model, not extending this one in place.
+Not built in this track: shape restyle-after-placement, layers, crop, text, blur/pixelate, per-tool style memory, unbounded undo (or any undo that survives a re-finalized selection). Any of those graduating in means graduating into §4.5's full model, not extending this one in place.
 
 ### 4.6 Shortcuts
 

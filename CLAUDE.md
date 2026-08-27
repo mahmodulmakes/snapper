@@ -57,13 +57,13 @@ src/
 | Global shortcut registration | `main/shortcuts/shortcutManager.ts` |
 | Persisted settings | `main/settings/store.ts` |
 | IPC channel names | `main/ipc/channels.ts` |
-| Minimal inline annotation window (BUILD-SPEC.md §2.4.2/§4.5a) | `main/editor/editorWindow.ts` |
+| Rasterizing drawn shapes onto the captured PNG | `main/output/annotationOverlay.ts` |
 
-Scrolling capture (`scrollingCapture.ts`, `stitcher.ts`), the **full** non-destructive annotation editor (per-shape move/resize, layers, crop, blur/pixelate, text), history, and pin windows are **deferred, not in v1.0 scope** — see BUILD-SPEC.md §2.4/§4.5. A **minimal** inline annotation track (arrows/boxes/ovals/lines, color picker, bake-on-export) is in scope per §2.4.2/§4.5a — don't build further ownership around the deferred items above until they're explicitly back in scope.
+Scrolling capture (`scrollingCapture.ts`, `stitcher.ts`), the **full** non-destructive annotation editor (per-shape move/resize, layers, crop, blur/pixelate, text), history, and pin windows are **deferred, not in v1.0 scope** — see BUILD-SPEC.md §2.4/§4.5. A **minimal** inline annotation track (arrows/boxes/ovals/lines, color picker, bake-on-export) is in scope per §2.4.2/§4.5a — drawn directly on the region-capture overlay (`renderer/overlay/annotationShapes.ts`, `annotationToolbar.ts`), not a separate window. `main/editor/` and `src/renderer/editor/` are unused Phase-1 scaffold again — don't build further ownership around the deferred items above until they're explicitly back in scope.
 
 **IPC discipline:** every channel name is a constant in `main/ipc/channels.ts`. No string literals for channels anywhere else. Every payload type is declared in `shared/types.ts`.
 
-**Overlay renderer is vanilla TypeScript + Canvas. Do not put React in it.** It must hit 60 fps and start in single-digit milliseconds. React is for the settings window and the minimal annotation editor window (BUILD-SPEC.md §2.4.2) — neither needs the overlay's 60fps/cold-start budget.
+**Overlay renderer is vanilla TypeScript + Canvas. Do not put React in it.** It must hit 60 fps and start in single-digit milliseconds. React is for the settings window only (v1.0 has no editor window) — inline annotation (BUILD-SPEC.md §2.4.2) lives in the vanilla-TS overlay renderer alongside everything else there, not in React.
 
 ---
 

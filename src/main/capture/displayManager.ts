@@ -1,5 +1,5 @@
 import { rectIntersection } from '../../shared/selectionMath'
-import type { PointInPoints, RectInPoints } from '../../shared/types'
+import type { NormalizedBoxBottomLeft, PointInPoints, RectInPoints } from '../../shared/types'
 
 // The ONLY file allowed to touch coordinate/scaleFactor conversion
 // (CLAUDE.md Hard Rule 3, BUILD-SPEC.md §3.2).
@@ -111,6 +111,33 @@ export function originForDisplayId(displayId: number, displays: DisplayInfo[]): 
   return display ? { x: display.boundsInPoints.x, y: display.boundsInPoints.y } : null
 }
 
+/**
+ * Converts one Vision-framework text-recognition box into global Electron
+ * points. `capturedRegionInPoints` is the same rect that was passed to
+ * `screencapture -R` to produce the image Vision analyzed.
+ *
+ * No explicit `scaleFactor` multiply/divide happens here, despite this being
+ * the file that owns all such math (Hard Rule 3) — Vision's box is a
+ * fraction (0-1) of the image's own dimensions, and that fraction is
+ * identical whether measured in points or native pixels, so scaleFactor
+ * cancels out. What this function DOES own, and why it belongs here per
+ * spikes/FINDINGS.md "Phase 8 spike B": flipping Vision's bottom-left-origin
+ * convention to Electron's top-left one, and scaling the normalized fraction
+ * by the captured region's real size in points.
+ */
+export function visionBoxToGlobalPoints(
+  boxNormalized: NormalizedBoxBottomLeft,
+  capturedRegionInPoints: RectInPoints
+): RectInPoints {
+  const topFraction = 1 - boxNormalized.y - boxNormalized.height
+  return {
+    x: capturedRegionInPoints.x + boxNormalized.x * capturedRegionInPoints.width,
+    y: capturedRegionInPoints.y + topFraction * capturedRegionInPoints.height,
+    width: boxNormalized.width * capturedRegionInPoints.width,
+    height: boxNormalized.height * capturedRegionInPoints.height
+  }
+}
+
 export interface CaptureSegmentPlan {
   displayId: number
   /** The portion of the selection on this display, in global points — pass straight to `-R`. */
@@ -126,6 +153,8 @@ export interface CapturePlan {
   singleCapture: boolean
   segments: CaptureSegmentPlan[]
   compositeSizeInPixels: PixelDimensions
+  /** The scaleFactor the composite image was produced at — the HIGHEST among touched displays (see below). Exposed so callers converting a point into this capture's own pixel space (e.g. inline annotation shapes, BUILD-SPEC.md §2.4.2) don't have to re-derive it. */
+  compositeScaleFactor: number
 }
 
 /**
@@ -154,7 +183,7 @@ export function planCapture(rectInPoints: RectInPoints, displays: DisplayInfo[])
 
   const allSameScale = scaleFactors.every((factor) => factor === compositeScaleFactor)
   if (allSameScale) {
-    return { singleCapture: true, segments: [], compositeSizeInPixels }
+    return { singleCapture: true, segments: [], compositeSizeInPixels, compositeScaleFactor }
   }
 
   const segments: CaptureSegmentPlan[] = touched.map(({ display, intersection }) => ({
@@ -167,5 +196,24 @@ export function planCapture(rectInPoints: RectInPoints, displays: DisplayInfo[])
     resizeToPixels: expectedPixelDimensions(intersection, compositeScaleFactor)
   }))
 
-  return { singleCapture: false, segments, compositeSizeInPixels }
+  return { singleCapture: false, segments, compositeSizeInPixels, compositeScaleFactor }
+}
+
+/**
+ * Converts one annotation shape endpoint (BUILD-SPEC.md §2.4.2) from a global
+ * point into its position within the captured image's own pixel space —
+ * offset by the capture rect's origin, scaled by that capture's
+ * `compositeScaleFactor` (from `planCapture`). Real scaleFactor
+ * multiplication, unlike `visionBoxToGlobalPoints` above — belongs here per
+ * Hard Rule 3.
+ */
+export function globalPointToCapturePixels(
+  globalPoint: PointInPoints,
+  captureOriginInPoints: PointInPoints,
+  scaleFactor: number
+): PointInPoints {
+  return {
+    x: (globalPoint.x - captureOriginInPoints.x) * scaleFactor,
+    y: (globalPoint.y - captureOriginInPoints.y) * scaleFactor
+  }
 }

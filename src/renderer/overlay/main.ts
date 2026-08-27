@@ -4,17 +4,42 @@
 // so a drag crossing a display boundary stays correct — this file only
 // reflects whatever main broadcasts and forwards raw input (mousedown/up,
 // modifier keys) back to it.
+import { drawAnnotationShape, isDegenerateShape } from './annotationShapes'
+import * as annotationToolbar from './annotationToolbar'
 import { hideLoupe, startMagnifier, stopMagnifier, updateMagnifier } from './magnifier'
-import type { OverlaySelectionStatePayload, PointInPoints, RectInPoints } from '../../shared/types'
+import * as textLayer from './textLayer'
+import type {
+  AnnotationShape,
+  CaptureMode,
+  OverlayResetPayload,
+  OverlaySelectionStatePayload,
+  PointInPoints,
+  RectInPoints,
+  TextCaptureResultPayload
+} from '../../shared/types'
 
 const canvas = document.getElementById('overlay-canvas')
 const ctx = canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : null
 const toolbar = document.getElementById('toolbar')
+const textStatus = document.getElementById('text-status')
+const textToolbar = document.getElementById('text-toolbar')
+const textToolbarCopySelectionBtn = document.getElementById('text-toolbar-copy-selection')
 
 let dragging = false
+let textDragging = false
+let shapeDrawing = false
 let liveRect: RectInPoints | null = null
 let selection: RectInPoints | null = null
 let isToolbarHost = false
+let captureMode: CaptureMode = 'region'
+// Inline annotation (BUILD-SPEC.md §2.4.2/§4.5a) — shapes drawn directly on
+// the overlay over the finalized selection. Tied to the selection's
+// lifetime: any re-finalize (a new drag, a nudge, Redo Selection) clears
+// them rather than trying to keep them positioned against a moved/resized
+// rect — per-shape move/resize is explicitly out of scope for this minimal
+// track (that's the deferred full editor, §4.5).
+let shapes: AnnotationShape[] = []
+let drawingShape: AnnotationShape | null = null
 const mods = { shift: false, option: false, space: false }
 
 function bounds(): { width: number; height: number } {
@@ -76,7 +101,48 @@ function render(): void {
   ctx.strokeStyle = '#3b82f6'
   ctx.lineWidth = 1
   ctx.strokeRect(Math.round(rect.x) + 0.5, Math.round(rect.y) + 0.5, rect.width - 1, rect.height - 1)
-  drawBadge(rect)
+
+  if (captureMode === 'text' && textLayer.isActive()) {
+    textLayer.drawHighlights(ctx)
+  } else {
+    drawBadge(rect)
+  }
+
+  if (captureMode === 'region') {
+    for (const shape of shapes) drawAnnotationShape(ctx, shape)
+    if (drawingShape) drawAnnotationShape(ctx, drawingShape)
+  }
+}
+
+function pointInRect(x: number, y: number, rect: RectInPoints): boolean {
+  return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height
+}
+
+function showTextStatus(label: string, rect: RectInPoints): void {
+  if (!textStatus) return
+  textStatus.textContent = label
+  textStatus.classList.add('visible')
+  positionBelowSelection(textStatus, rect)
+}
+
+function hideTextStatus(): void {
+  textStatus?.classList.remove('visible')
+}
+
+/** Always-visible "Copy All"/"Cancel" plus a "Copy Selection" that only shows once the user has actually highlighted something — the flow never depends on a keyboard-only shortcut the user has to already know about. */
+function showTextToolbar(rect: RectInPoints): void {
+  if (!textToolbar) return
+  textToolbar.classList.add('visible')
+  updateCopySelectionButtonVisibility()
+  positionBelowSelection(textToolbar, rect)
+}
+
+function hideTextToolbar(): void {
+  textToolbar?.classList.remove('visible')
+}
+
+function updateCopySelectionButtonVisibility(): void {
+  textToolbarCopySelectionBtn?.classList.toggle('hidden', !textLayer.hasSelection())
 }
 
 function currentModifiers(): { square: boolean; fromCenter: boolean; space: boolean } {
@@ -86,39 +152,54 @@ function currentModifiers(): { square: boolean; fromCenter: boolean; space: bool
 /**
  * Anchored below the selection, flipped above if it'd go offscreen, clamped
  * to display bounds (BUILD-SPEC.md §4.3). Lives inside the overlay window
- * itself — inherits always-on-top for free, no separate window needed.
+ * itself — inherits always-on-top for free, no separate window needed. Shared
+ * by the region-capture toolbar and Universal Text Capture's "Reading…"
+ * status (BUILD-SPEC.md §4.9) — both anchor to the selection the same way.
  */
-function positionToolbar(rect: RectInPoints): void {
-  if (!toolbar) return
-  toolbar.classList.add('visible')
-
-  const toolbarWidth = toolbar.offsetWidth
-  const toolbarHeight = toolbar.offsetHeight
+function positionBelowSelection(el: HTMLElement, rect: RectInPoints): void {
+  const elWidth = el.offsetWidth
+  const elHeight = el.offsetHeight
   const gap = 8
   const { width: boundsWidth, height: boundsHeight } = bounds()
 
-  let left = rect.x + rect.width / 2 - toolbarWidth / 2
+  let left = rect.x + rect.width / 2 - elWidth / 2
   let top = rect.y + rect.height + gap
-  if (top + toolbarHeight > boundsHeight) {
-    top = rect.y - toolbarHeight - gap
+  if (top + elHeight > boundsHeight) {
+    top = rect.y - elHeight - gap
   }
-  top = Math.min(Math.max(top, 0), Math.max(0, boundsHeight - toolbarHeight))
-  left = Math.min(Math.max(left, 0), Math.max(0, boundsWidth - toolbarWidth))
+  top = Math.min(Math.max(top, 0), Math.max(0, boundsHeight - elHeight))
+  left = Math.min(Math.max(left, 0), Math.max(0, boundsWidth - elWidth))
 
-  toolbar.style.left = `${left}px`
-  toolbar.style.top = `${top}px`
+  el.style.left = `${left}px`
+  el.style.top = `${top}px`
+}
+
+function positionToolbar(rect: RectInPoints): void {
+  if (!toolbar) return
+  toolbar.classList.add('visible')
+  positionBelowSelection(toolbar, rect)
 }
 
 function hideToolbar(): void {
   toolbar?.classList.remove('visible')
 }
 
-function resetSelectionState(): void {
+function resetSelectionState(payload: OverlayResetPayload): void {
   dragging = false
+  textDragging = false
+  shapeDrawing = false
   liveRect = null
   selection = null
   isToolbarHost = false
+  captureMode = payload.mode
+  shapes = []
+  drawingShape = null
+  if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'crosshair'
   hideToolbar()
+  hideTextStatus()
+  hideTextToolbar()
+  annotationToolbar.hide()
+  textLayer.clear()
   render()
   startMagnifier()
 }
@@ -129,17 +210,82 @@ function onIdleMouseMove(event: MouseEvent): void {
   updateMagnifier(event.clientX, event.clientY)
 }
 
+function onMouseMove(event: MouseEvent): void {
+  if (shapeDrawing && drawingShape) {
+    drawingShape = { ...drawingShape, x1: event.clientX, y1: event.clientY }
+    render()
+    return
+  }
+  if (textDragging) {
+    textLayer.updateSelectionDrag(event.clientX, event.clientY)
+    updateCopySelectionButtonVisibility()
+    render()
+    return
+  }
+  if (captureMode === 'text' && textLayer.isActive() && !dragging && canvas instanceof HTMLCanvasElement) {
+    canvas.style.cursor = textLayer.containsPoint(event.clientX, event.clientY) ? 'text' : 'default'
+  }
+  onIdleMouseMove(event)
+}
+
 function onMouseDown(event: MouseEvent): void {
+  // In text-capture mode, a click landing inside the already-recognized text
+  // region starts a word-selection drag (textLayer.ts) instead of a brand
+  // new region-select drag — clicking anywhere else starts over, same as
+  // region-capture's "click elsewhere to redo" feel.
+  if (captureMode === 'text' && textLayer.isActive() && textLayer.containsPoint(event.clientX, event.clientY)) {
+    textDragging = true
+    textLayer.startSelectionDrag(event.clientX, event.clientY)
+    updateCopySelectionButtonVisibility()
+    render()
+    return
+  }
+
+  // Inline annotation (BUILD-SPEC.md §2.4.2): once a region is finalized, a
+  // click INSIDE it draws a shape with whatever tool/color is active,
+  // instead of starting a brand new selection — a click OUTSIDE it still
+  // starts over, same as before.
+  if (captureMode === 'region' && selection && pointInRect(event.clientX, event.clientY, selection)) {
+    shapeDrawing = true
+    const tool = annotationToolbar.getActiveTool()
+    const color = annotationToolbar.getActiveColor()
+    drawingShape = { tool, color, x0: event.clientX, y0: event.clientY, x1: event.clientX, y1: event.clientY }
+    render()
+    return
+  }
+
   const anchorInPoints: PointInPoints = { x: event.clientX, y: event.clientY }
   dragging = true
   selection = null
   isToolbarHost = false
+  shapes = []
+  drawingShape = null
   hideToolbar()
+  hideTextStatus()
+  hideTextToolbar()
+  annotationToolbar.hide()
+  textLayer.clear()
   hideLoupe()
   window.overlayApi.startDrag(anchorInPoints, currentModifiers())
 }
 
 function onMouseUp(): void {
+  if (shapeDrawing) {
+    shapeDrawing = false
+    if (drawingShape && !isDegenerateShape(drawingShape)) {
+      shapes = [...shapes, drawingShape]
+      annotationToolbar.setUndoEnabled(true)
+    }
+    drawingShape = null
+    render()
+    return
+  }
+  if (textDragging) {
+    textDragging = false
+    textLayer.endSelectionDrag()
+    updateCopySelectionButtonVisibility()
+    return
+  }
   if (!dragging) return
   dragging = false
   window.overlayApi.endDrag()
@@ -158,9 +304,12 @@ function onSelectionState(payload: OverlaySelectionStatePayload): void {
 
   liveRect = null
   isToolbarHost = payload.isToolbarHost
+  shapes = []
+  drawingShape = null
   if (payload.rectInPoints.width < 2 || payload.rectInPoints.height < 2) {
     selection = null
     hideToolbar()
+    annotationToolbar.hide()
     render()
     return
   }
@@ -168,9 +317,18 @@ function onSelectionState(payload: OverlaySelectionStatePayload): void {
   selection = payload.rectInPoints
   hideLoupe()
   if (isToolbarHost) {
-    positionToolbar(selection)
+    if (captureMode === 'text') {
+      showTextStatus('Reading…', selection)
+      annotationToolbar.hide()
+    } else {
+      positionToolbar(selection)
+      const { width: boundsWidth, height: boundsHeight } = bounds()
+      annotationToolbar.show(selection, boundsWidth, boundsHeight)
+      annotationToolbar.setUndoEnabled(false)
+    }
   } else {
     hideToolbar()
+    annotationToolbar.hide()
   }
   render()
 }
@@ -178,23 +336,27 @@ function onSelectionState(payload: OverlaySelectionStatePayload): void {
 function triggerCopy(): void {
   if (!selection) return
   hideToolbar()
-  window.overlayApi.copySelection(selection)
+  annotationToolbar.hide()
+  window.overlayApi.copySelection(selection, shapes)
 }
 
 function triggerSave(): void {
   if (!selection) return
   hideToolbar()
-  window.overlayApi.saveSelection(selection)
+  annotationToolbar.hide()
+  window.overlayApi.saveSelection(selection, shapes)
 }
 
-function triggerAnnotate(): void {
-  if (!selection) return
-  hideToolbar()
-  window.overlayApi.annotateSelection(selection)
+function undoLastShape(): void {
+  if (shapes.length === 0) return
+  shapes = shapes.slice(0, -1)
+  annotationToolbar.setUndoEnabled(shapes.length > 0)
+  render()
 }
 
 function triggerRedo(): void {
   hideToolbar()
+  annotationToolbar.hide()
   window.overlayApi.redoSelection()
 }
 
@@ -204,9 +366,50 @@ function triggerCancel(): void {
   // — the window is about to hide either way, but leaving stale toolbar/
   // selection state hanging around between now and then is a needless trap.
   hideToolbar()
+  hideTextStatus()
+  hideTextToolbar()
+  annotationToolbar.hide()
+  textLayer.clear()
   selection = null
   liveRect = null
+  shapes = []
+  drawingShape = null
   window.overlayApi.dismiss()
+}
+
+/** Universal Text Capture's result arriving from main (BUILD-SPEC.md §4.9) — the moment recognition finishes after mouse-up. */
+function onTextCaptureResult(payload: TextCaptureResultPayload): void {
+  hideTextStatus()
+  if (payload.lines.length === 0 || !selection) {
+    // Nothing recognized, or the window was reset before this arrived — main
+    // already showed a native notification for that case
+    // (textCaptureService.ts's "no text found"/failure paths); nothing more
+    // to render here.
+    return
+  }
+  textLayer.setResult(payload, selection)
+  if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'text'
+  showTextToolbar(selection)
+  render()
+}
+
+/** Copies whatever's currently highlighted. Falls back to selecting everything first when nothing's highlighted — used by both ⌘C and the "Copy Selection" button, so ⌘C always does something useful rather than silently no-op-ing. */
+function triggerTextCopy(): void {
+  if (!textLayer.hasSelection()) {
+    textLayer.selectAll()
+    updateCopySelectionButtonVisibility()
+    render()
+  }
+  hideTextToolbar()
+  window.overlayApi.copyTextCapture(textLayer.getSelectedText())
+}
+
+/** "Copy All" — always copies every recognized word, regardless of the current highlight. */
+function triggerTextCopyAll(): void {
+  textLayer.selectAll()
+  render()
+  hideTextToolbar()
+  window.overlayApi.copyTextCapture(textLayer.getSelectedText())
 }
 
 function onKeyDown(event: KeyboardEvent): void {
@@ -214,11 +417,38 @@ function onKeyDown(event: KeyboardEvent): void {
     triggerCancel()
     return
   }
+
+  if (captureMode === 'text' && textLayer.isActive()) {
+    if (event.metaKey && event.key.toLowerCase() === 'a') {
+      event.preventDefault()
+      textLayer.selectAll()
+      updateCopySelectionButtonVisibility()
+      render()
+      return
+    }
+    if (event.metaKey && event.key.toLowerCase() === 'c') {
+      event.preventDefault()
+      triggerTextCopy()
+      return
+    }
+    // Region-select's Enter-to-copy and arrow-key nudge don't apply here —
+    // `selection` is still the finalized rect that defined the recognized
+    // region, but re-copying it as an image or nudging it would be wrong
+    // once text results are showing.
+    return
+  }
+
   if (event.key === 'Enter' && selection && !dragging) {
     // Default action on Enter is a setting (most users: Copy) — hardcoded
     // until the Settings window (Phase 5) can configure it.
     event.preventDefault()
     triggerCopy()
+    return
+  }
+
+  if (captureMode === 'region' && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+    event.preventDefault()
+    undoLastShape()
     return
   }
 
@@ -267,19 +497,29 @@ function onVisibilityChange(): void {
 if (canvas instanceof HTMLCanvasElement) {
   window.addEventListener('resize', resizeCanvas)
   canvas.addEventListener('mousedown', onMouseDown)
-  window.addEventListener('mousemove', onIdleMouseMove)
+  window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   document.addEventListener('visibilitychange', onVisibilityChange)
   window.overlayApi.onReset(resetSelectionState)
   window.overlayApi.onSelectionState(onSelectionState)
+  window.overlayApi.onTextCaptureResult(onTextCaptureResult)
 
   document.getElementById('toolbar-copy')?.addEventListener('click', triggerCopy)
   document.getElementById('toolbar-save')?.addEventListener('click', triggerSave)
-  document.getElementById('toolbar-annotate')?.addEventListener('click', triggerAnnotate)
   document.getElementById('toolbar-redo')?.addEventListener('click', triggerRedo)
   document.getElementById('toolbar-cancel')?.addEventListener('click', triggerCancel)
+
+  document.getElementById('text-toolbar-copy-all')?.addEventListener('click', triggerTextCopyAll)
+  textToolbarCopySelectionBtn?.addEventListener('click', triggerTextCopy)
+  document.getElementById('text-toolbar-cancel')?.addEventListener('click', triggerCancel)
+
+  annotationToolbar.init({
+    onToolChange: () => {},
+    onColorChange: () => {},
+    onUndo: undoLastShape
+  })
 
   resizeCanvas()
 }

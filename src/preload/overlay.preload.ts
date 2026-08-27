@@ -1,20 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../main/ipc/channels'
 import type {
+  AnnotationShape,
   DragModifiersPayload,
+  OverlayExportPayload,
+  OverlayResetPayload,
   OverlaySelectionStatePayload,
   PointInPoints,
-  RectInPoints
+  RectInPoints,
+  TextCaptureResultPayload
 } from '../shared/types'
 
 // Vanilla TS + Canvas renderer (BUILD-SPEC.md §3.7).
 contextBridge.exposeInMainWorld('overlayApi', {
   dismiss: (): void => ipcRenderer.send(IPC.OVERLAY_DISMISS),
-  copySelection: (rect: RectInPoints): void => ipcRenderer.send(IPC.OVERLAY_ACTION_COPY, rect),
-  saveSelection: (rect: RectInPoints): void => ipcRenderer.send(IPC.OVERLAY_ACTION_SAVE, rect),
-  annotateSelection: (rect: RectInPoints): void => ipcRenderer.send(IPC.OVERLAY_ACTION_ANNOTATE, rect),
-  onReset: (callback: () => void): void => {
-    ipcRenderer.on(IPC.OVERLAY_RESET, () => callback())
+  copySelection: (rectInPoints: RectInPoints, shapes: AnnotationShape[]): void =>
+    ipcRenderer.send(IPC.OVERLAY_ACTION_COPY, { rectInPoints, shapes } satisfies OverlayExportPayload),
+  saveSelection: (rectInPoints: RectInPoints, shapes: AnnotationShape[]): void =>
+    ipcRenderer.send(IPC.OVERLAY_ACTION_SAVE, { rectInPoints, shapes } satisfies OverlayExportPayload),
+  onReset: (callback: (payload: OverlayResetPayload) => void): void => {
+    ipcRenderer.on(IPC.OVERLAY_RESET, (_event, payload: OverlayResetPayload) => callback(payload))
   },
   startDrag: (anchorInPoints: PointInPoints, modifiers: DragModifiersPayload): void => {
     ipcRenderer.send(IPC.OVERLAY_DRAG_START, { anchorInPoints, modifiers })
@@ -30,5 +35,9 @@ contextBridge.exposeInMainWorld('overlayApi', {
     ipcRenderer.send(IPC.OVERLAY_SELECTION_NUDGE, { dx, dy })
   },
   redoSelection: (): void => ipcRenderer.send(IPC.OVERLAY_SELECTION_REDO),
-  getCaptureSourceId: (): Promise<string | null> => ipcRenderer.invoke(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID)
+  getCaptureSourceId: (): Promise<string | null> => ipcRenderer.invoke(IPC.OVERLAY_GET_CAPTURE_SOURCE_ID),
+  onTextCaptureResult: (callback: (payload: TextCaptureResultPayload) => void): void => {
+    ipcRenderer.on(IPC.TEXT_CAPTURE_RESULT, (_event, payload: TextCaptureResultPayload) => callback(payload))
+  },
+  copyTextCapture: (text: string): void => ipcRenderer.send(IPC.TEXT_CAPTURE_COPY, { text })
 })

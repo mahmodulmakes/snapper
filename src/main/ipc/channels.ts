@@ -3,7 +3,6 @@ export const IPC = {
   OVERLAY_DISMISS: 'overlay:dismiss',
   OVERLAY_ACTION_COPY: 'overlay:action-copy',
   OVERLAY_ACTION_SAVE: 'overlay:action-save',
-  OVERLAY_ACTION_ANNOTATE: 'overlay:action-annotate',
   OVERLAY_RESET: 'overlay:reset',
   OVERLAY_DRAG_START: 'overlay:drag-start',
   OVERLAY_DRAG_MODIFIERS: 'overlay:drag-modifiers',
@@ -19,10 +18,10 @@ export const IPC = {
   SETTINGS_SET_SHORTCUTS_PAUSED: 'settings:set-shortcuts-paused',
   SETTINGS_SET_SHORTCUT: 'settings:set-shortcut',
   SETTINGS_OPEN_KEYBOARD_SETTINGS: 'settings:open-keyboard-settings',
-  EDITOR_GET_IMAGE: 'editor:get-image',
-  EDITOR_EXPORT_COPY: 'editor:export-copy',
-  EDITOR_EXPORT_SAVE: 'editor:export-save',
-  EDITOR_CANCEL: 'editor:cancel'
+  TEXT_CAPTURE_START: 'text-capture:start',
+  TEXT_CAPTURE_RESULT: 'text-capture:result',
+  TEXT_CAPTURE_COPY: 'text-capture:copy',
+  TEXT_CAPTURE_CANCEL: 'text-capture:cancel'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

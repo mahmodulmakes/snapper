@@ -8,6 +8,15 @@ files:
   - package.json
 asarUnpack:
   - '**/*.node'
+# Universal Text Capture's Vision helper (native/textRecognizer/main.swift,
+# built by scripts/buildTextRecognizer.mjs) — BUILD-SPEC.md §3.10. Untested
+# with Phase 7's `mac.target.arch: [universal]` requirement: a plain
+# `swiftc -O` build only produces the host machine's own architecture, not a
+# universal binary — revisit when Phase 7 (packaging/signing/notarization,
+# currently parked per PHASES.md) actually resumes, not before.
+extraResources:
+  - from: resources/bin
+    to: bin
 mac:
   icon: build/icon.png
   category: public.app-category.productivity

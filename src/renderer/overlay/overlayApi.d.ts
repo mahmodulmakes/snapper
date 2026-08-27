@@ -1,11 +1,18 @@
-import type { DragModifiersPayload, OverlaySelectionStatePayload, PointInPoints, RectInPoints } from '../../shared/types'
+import type {
+  AnnotationShape,
+  DragModifiersPayload,
+  OverlayResetPayload,
+  OverlaySelectionStatePayload,
+  PointInPoints,
+  RectInPoints,
+  TextCaptureResultPayload
+} from '../../shared/types'
 
 export interface OverlayApi {
   dismiss: () => void
-  copySelection: (rect: RectInPoints) => void
-  saveSelection: (rect: RectInPoints) => void
-  annotateSelection: (rect: RectInPoints) => void
-  onReset: (callback: () => void) => void
+  copySelection: (rectInPoints: RectInPoints, shapes: AnnotationShape[]) => void
+  saveSelection: (rectInPoints: RectInPoints, shapes: AnnotationShape[]) => void
+  onReset: (callback: (payload: OverlayResetPayload) => void) => void
   startDrag: (anchorInPoints: PointInPoints, modifiers: DragModifiersPayload) => void
   sendDragModifiers: (modifiers: DragModifiersPayload) => void
   endDrag: () => void
@@ -13,6 +20,8 @@ export interface OverlayApi {
   nudgeSelection: (dx: number, dy: number) => void
   redoSelection: () => void
   getCaptureSourceId: () => Promise<string | null>
+  onTextCaptureResult: (callback: (payload: TextCaptureResultPayload) => void) => void
+  copyTextCapture: (text: string) => void
 }
 
 declare global {

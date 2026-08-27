@@ -17,3 +17,8 @@ export async function copyImageFileToClipboard(filePath: string): Promise<void> 
   }
   clipboard.writeImage(image)
 }
+
+/** Writes plain text to the system clipboard — Universal Text Capture's Copy action (BUILD-SPEC.md §4.9). */
+export function copyTextToClipboard(text: string): void {
+  clipboard.writeText(text)
+}

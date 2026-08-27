@@ -2,14 +2,15 @@ import { app, screen } from 'electron'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { playCaptureSound } from './captureSound'
-import { planCapture, type DisplayInfo } from './displayManager'
+import { globalPointToCapturePixels, planCapture, type DisplayInfo } from './displayManager'
 import { captureRegion, ScreenCaptureError } from './screencapture'
 import { stitchSegments } from './stitcher'
+import { compositeAnnotations } from '../output/annotationOverlay'
 import { copyImageFileToClipboard } from '../output/clipboard'
 import { saveScreenshotFile } from '../output/fileWriter'
 import { logger } from '../logger'
 import { notifyFailure as notifyFailureBase } from '../notify'
-import type { RectInPoints } from '../../shared/types'
+import type { AnnotationShape, AnnotationShapePixels, RectInPoints } from '../../shared/types'
 
 function currentDisplayInfos(): DisplayInfo[] {
   return screen.getAllDisplays().map((display) => ({
@@ -32,6 +33,16 @@ function notifyFailure(message: string): void {
   notifyFailureBase('Screenshot failed', message)
 }
 
+/** Converts drawn shapes (BUILD-SPEC.md §2.4.2), given in global points, into the captured image's own pixel space, with a stroke width scaled to the image size. */
+function shapesToPixels(shapes: AnnotationShape[], captureOriginInPoints: RectInPoints, scaleFactor: number, imageWidthPixels: number, imageHeightPixels: number): AnnotationShapePixels[] {
+  const lineWidthInPixels = Math.max(4, Math.round(Math.min(imageWidthPixels, imageHeightPixels) / 200))
+  return shapes.map((shape) => {
+    const p0 = globalPointToCapturePixels({ x: shape.x0, y: shape.y0 }, captureOriginInPoints, scaleFactor)
+    const p1 = globalPointToCapturePixels({ x: shape.x1, y: shape.y1 }, captureOriginInPoints, scaleFactor)
+    return { tool: shape.tool, color: shape.color, lineWidthInPixels, x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y }
+  })
+}
+
 /**
  * Captures to a scratch file under the app's own temp directory (Hard Rule
  * 7). Caller must clean it up. For the common case (every display the rect
@@ -39,8 +50,13 @@ function notifyFailure(message: string): void {
  * `-R` call. For a selection crossing a scaleFactor boundary, captures each
  * display's segment separately at its own native resolution and stitches
  * them (see displayManager.ts's `planCapture` and stitcher.ts).
+ *
+ * `shapes` (BUILD-SPEC.md §2.4.2) are optional and drawn inline on the
+ * overlay before Copy/Save — when present, they're rasterized onto the
+ * captured PNG in place, after the real screenshot pixels exist, never
+ * before (so they always land in the output, whatever the capture backend).
  */
-async function captureToTemp(rectInPoints: RectInPoints): Promise<TempCapture | null> {
+export async function captureToTemp(rectInPoints: RectInPoints, shapes: AnnotationShape[] = []): Promise<TempCapture | null> {
   const tempDir = await mkdtemp(join(app.getPath('temp'), 'screenshot-app-'))
   const tempPath = join(tempDir, 'capture.png')
   const plan = planCapture(rectInPoints, currentDisplayInfos())
@@ -49,31 +65,49 @@ async function captureToTemp(rectInPoints: RectInPoints): Promise<TempCapture | 
     if (plan.singleCapture) {
       await captureRegion({ rectInPoints, outputPath: tempPath })
       playCaptureSound()
-      return { tempDir, tempPath }
+    } else {
+      const segmentFiles = await Promise.all(
+        plan.segments.map(async (segment, index) => {
+          const segmentPath = join(tempDir, `segment-${index}.png`)
+          await captureRegion({ rectInPoints: segment.segmentRectInPoints, outputPath: segmentPath })
+          return {
+            pngPath: segmentPath,
+            destXPixels: segment.destInPixels.x,
+            destYPixels: segment.destInPixels.y,
+            resizeToPixels: segment.resizeToPixels
+          }
+        })
+      )
+
+      await stitchSegments({ segments: segmentFiles, outputPath: tempPath, compositeSizeInPixels: plan.compositeSizeInPixels })
+      playCaptureSound()
     }
-
-    const segmentFiles = await Promise.all(
-      plan.segments.map(async (segment, index) => {
-        const segmentPath = join(tempDir, `segment-${index}.png`)
-        await captureRegion({ rectInPoints: segment.segmentRectInPoints, outputPath: segmentPath })
-        return {
-          pngPath: segmentPath,
-          destXPixels: segment.destInPixels.x,
-          destYPixels: segment.destInPixels.y,
-          resizeToPixels: segment.resizeToPixels
-        }
-      })
-    )
-
-    await stitchSegments({ segments: segmentFiles, outputPath: tempPath, compositeSizeInPixels: plan.compositeSizeInPixels })
-    playCaptureSound()
-    return { tempDir, tempPath }
   } catch (err) {
     const message = err instanceof ScreenCaptureError ? err.message : 'screencapture failed unexpectedly'
     notifyFailure(message)
     await rm(tempDir, { recursive: true, force: true })
     return null
   }
+
+  if (shapes.length > 0) {
+    try {
+      const pixelShapes = shapesToPixels(
+        shapes,
+        rectInPoints,
+        plan.compositeScaleFactor,
+        plan.compositeSizeInPixels.width,
+        plan.compositeSizeInPixels.height
+      )
+      await compositeAnnotations(tempPath, pixelShapes, plan.compositeSizeInPixels.width, plan.compositeSizeInPixels.height)
+    } catch (err) {
+      // Degrade gracefully: still return the real, un-annotated capture
+      // rather than failing the whole action — losing hand-drawn shapes is
+      // recoverable (redo the capture), losing the screenshot itself isn't.
+      notifyFailure(`Captured, but couldn't draw annotations: ${String(err)}`)
+    }
+  }
+
+  return { tempDir, tempPath }
 }
 
 /**
@@ -105,9 +139,9 @@ export async function captureRectAndOutput(rectInPoints: RectInPoints): Promise<
   }
 }
 
-/** The floating toolbar's "Copy" button (BUILD-SPEC.md §4.3) — clipboard only. */
-export async function captureRectAndCopy(rectInPoints: RectInPoints): Promise<void> {
-  const captured = await captureToTemp(rectInPoints)
+/** The floating toolbar's "Copy" button (BUILD-SPEC.md §4.3) — clipboard only. `shapes` are whatever was drawn inline on the overlay (§2.4.2) before Copy was clicked. */
+export async function captureRectAndCopy(rectInPoints: RectInPoints, shapes: AnnotationShape[] = []): Promise<void> {
+  const captured = await captureToTemp(rectInPoints, shapes)
   if (!captured) return
 
   try {
@@ -120,19 +154,9 @@ export async function captureRectAndCopy(rectInPoints: RectInPoints): Promise<vo
   }
 }
 
-/**
- * The floating toolbar's "Annotate" button (BUILD-SPEC.md §2.4.2) — captures
- * to a temp file but does NOT clean it up. Unlike Copy/Save, the output isn't
- * known yet: the caller (main/editor/editorWindow.ts) owns the temp dir's
- * lifecycle until the user exports (copy/save) or cancels from the editor.
- */
-export async function captureRectForAnnotation(rectInPoints: RectInPoints): Promise<TempCapture | null> {
-  return captureToTemp(rectInPoints)
-}
-
-/** The floating toolbar's "Save" button (BUILD-SPEC.md §4.3) — disk only. */
-export async function captureRectAndSave(rectInPoints: RectInPoints): Promise<CaptureResult | null> {
-  const captured = await captureToTemp(rectInPoints)
+/** The floating toolbar's "Save" button (BUILD-SPEC.md §4.3) — disk only. `shapes` are whatever was drawn inline on the overlay (§2.4.2) before Save was clicked. */
+export async function captureRectAndSave(rectInPoints: RectInPoints, shapes: AnnotationShape[] = []): Promise<CaptureResult | null> {
+  const captured = await captureToTemp(rectInPoints, shapes)
   if (!captured) return null
 
   try {

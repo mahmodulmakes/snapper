@@ -6,6 +6,7 @@ import {
   overlayLocalRectToGlobalPoints,
   planCapture,
   virtualDesktopBoundsInPoints,
+  visionBoxToGlobalPoints,
   type DisplayInfo
 } from '../../src/main/capture/displayManager'
 
@@ -55,6 +56,37 @@ describe('globalRectToOverlayLocalPoints', () => {
   it('offsets x/y back by the window origin, leaving width/height unchanged', () => {
     const result = globalRectToOverlayLocalPoints({ x: 0, y: -1080 }, { x: 50, y: -50, width: 300, height: 100 })
     expect(result).toEqual({ x: 50, y: 1030, width: 300, height: 100 })
+  })
+})
+
+describe('visionBoxToGlobalPoints (Phase 8, spikes/FINDINGS.md "Phase 8 spike B")', () => {
+  it('maps a box covering the entire image to the entire captured region', () => {
+    const result = visionBoxToGlobalPoints({ x: 0, y: 0, width: 1, height: 1 }, { x: 100, y: 50, width: 500, height: 220 })
+    expect(result).toEqual({ x: 100, y: 50, width: 500, height: 220 })
+  })
+
+  it("flips Vision's bottom-left origin to Electron's top-left origin — a box near the TOP of the image has Vision y close to 1", () => {
+    const result = visionBoxToGlobalPoints({ x: 0, y: 0.8, width: 0.2, height: 0.1 }, { x: 0, y: 0, width: 1000, height: 200 })
+    expect(result.x).toBe(0)
+    expect(result.y).toBeCloseTo(20)
+    expect(result.width).toBeCloseTo(200)
+    expect(result.height).toBeCloseTo(20)
+  })
+
+  it('flips a box near the BOTTOM of the image — Vision y close to 0 — to the bottom of the region', () => {
+    const result = visionBoxToGlobalPoints({ x: 0, y: 0, width: 0.2, height: 0.1 }, { x: 0, y: 0, width: 1000, height: 200 })
+    expect(result.x).toBe(0)
+    expect(result.y).toBeCloseTo(180)
+    expect(result.width).toBeCloseTo(200)
+    expect(result.height).toBeCloseTo(20)
+  })
+
+  it('offsets by the captured region origin, including a negative-origin display (external above/left of primary)', () => {
+    const result = visionBoxToGlobalPoints({ x: 0.1, y: 0.1, width: 0.5, height: 0.2 }, { x: -1200, y: -900, width: 400, height: 100 })
+    expect(result.x).toBeCloseTo(-1160)
+    expect(result.y).toBeCloseTo(-830)
+    expect(result.width).toBeCloseTo(200)
+    expect(result.height).toBeCloseTo(20)
   })
 })
 
