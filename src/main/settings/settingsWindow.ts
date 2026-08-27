@@ -24,8 +24,8 @@ export function showSettingsWindow(): void {
   }
 
   win = new BrowserWindow({
-    width: 480,
-    height: 420,
+    width: 520,
+    height: 520,
     resizable: false,
     fullscreenable: false,
     title: 'Settings',

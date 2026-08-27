@@ -68,6 +68,7 @@ export type ShortcutBindings = Record<ShortcutActionId, string>
 export interface SettingsState {
   launchAtLogin: boolean
   shortcuts: ShortcutBindings
+  shortcutsEnabled: Record<ShortcutActionId, boolean>
   shortcutsPaused: boolean
 }
 

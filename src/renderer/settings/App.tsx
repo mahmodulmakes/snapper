@@ -8,15 +8,45 @@ const SHORTCUT_LABELS: Record<ShortcutActionId, string> = {
   captureText: 'Capture Text'
 }
 
+interface ToggleProps {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+}
+
+/** One consistent switch style for every on/off setting in this window, replacing a mix of default browser checkboxes. */
+function Toggle({ checked, onChange, label }: ToggleProps): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? 'bg-blue-500' : 'bg-neutral-700'}`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  )
+}
+
 interface ShortcutRowProps {
   id: ShortcutActionId
   accelerator: string
   onRebind: (id: ShortcutActionId, accelerator: string) => Promise<boolean>
+  /** Only Capture Text has this for now (BUILD-SPEC.md §2.4.1's beta track) — Capture Area/Full Screen are core to the app, not optional. */
+  enabled?: boolean
+  onToggleEnabled?: (enabled: boolean) => void
 }
 
-function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Element {
+function ShortcutRow({ id, accelerator, onRebind, enabled, onToggleEnabled }: ShortcutRowProps): JSX.Element {
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const hasEnabledToggle = onToggleEnabled !== undefined
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -55,9 +85,11 @@ function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Eleme
   )
 
   return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm text-neutral-200">{SHORTCUT_LABELS[id]}</span>
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between py-2.5">
+      <span className={`text-sm ${enabled === false ? 'text-neutral-500' : 'text-neutral-200'}`}>
+        {SHORTCUT_LABELS[id]}
+      </span>
+      <div className="flex items-center gap-3">
         {error && <span className="max-w-[220px] text-right text-xs text-red-400">{error}</span>}
         <button
           type="button"
@@ -67,7 +99,9 @@ function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Eleme
           }}
           onKeyDown={handleKeyDown}
           onBlur={() => setRecording(false)}
-          className={`min-w-[96px] rounded-md border px-3 py-1.5 font-mono text-sm ${
+          className={`min-w-[96px] rounded-md border px-3 py-1.5 font-mono text-sm transition-opacity ${
+            enabled === false ? 'opacity-40' : ''
+          } ${
             recording
               ? 'border-blue-500 bg-blue-500/10 text-blue-300'
               : 'border-neutral-700 bg-neutral-800 text-neutral-100 hover:bg-neutral-700'
@@ -75,6 +109,9 @@ function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Eleme
         >
           {recording ? 'Press keys…' : formatAcceleratorForDisplay(accelerator)}
         </button>
+        {hasEnabledToggle && (
+          <Toggle checked={enabled ?? true} onChange={onToggleEnabled} label={`${SHORTCUT_LABELS[id]} enabled`} />
+        )}
       </div>
     </div>
   )
@@ -99,6 +136,11 @@ export default function App(): JSX.Element {
     return ok
   }, [])
 
+  const setShortcutEnabled = useCallback((id: ShortcutActionId, enabled: boolean) => {
+    setState((prev) => (prev ? { ...prev, shortcutsEnabled: { ...prev.shortcutsEnabled, [id]: enabled } } : prev))
+    window.settingsApi.setShortcutEnabled(id, enabled)
+  }, [])
+
   if (!state) {
     return (
       <div className="flex h-screen items-center justify-center bg-neutral-900 text-sm text-neutral-500">
@@ -108,50 +150,59 @@ export default function App(): JSX.Element {
   }
 
   return (
-    <div className="h-screen overflow-y-auto bg-neutral-900 px-6 py-5 text-neutral-100">
-      <section className="mb-6">
-        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">General</h2>
-        <label className="flex items-center justify-between py-2">
+    <div className="h-screen overflow-y-auto bg-neutral-900 px-5 py-5 text-neutral-100">
+      <section className="mb-4 rounded-lg border border-neutral-800 p-4">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">General</h2>
+
+        <div className="flex items-center justify-between py-1.5">
           <span className="text-sm text-neutral-200">Launch at login</span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={state.launchAtLogin}
-            onChange={(event) => {
-              const enabled = event.target.checked
+            onChange={(enabled) => {
               setState({ ...state, launchAtLogin: enabled })
               window.settingsApi.setLaunchAtLogin(enabled)
             }}
-            className="h-4 w-4 accent-blue-500"
+            label="Launch at login"
           />
-        </label>
+        </div>
+
+        <div className="flex items-center justify-between py-1.5">
+          <span className="text-sm text-neutral-200">Pause all shortcuts</span>
+          <Toggle
+            checked={state.shortcutsPaused}
+            onChange={(paused) => {
+              setState({ ...state, shortcutsPaused: paused })
+              window.settingsApi.setShortcutsPaused(paused)
+            }}
+            label="Pause all shortcuts"
+          />
+        </div>
+        <p className="mt-1 text-xs text-neutral-500">
+          Temporarily disable every capture shortcut — useful when recording your screen or presenting.
+        </p>
       </section>
 
-      <section>
+      <section className="mb-4 rounded-lg border border-neutral-800 p-4">
         <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Shortcuts</h2>
         <div className="divide-y divide-neutral-800">
           <ShortcutRow id="captureArea" accelerator={state.shortcuts.captureArea} onRebind={rebind} />
           <ShortcutRow id="captureFullScreen" accelerator={state.shortcuts.captureFullScreen} onRebind={rebind} />
-          <ShortcutRow id="captureText" accelerator={state.shortcuts.captureText} onRebind={rebind} />
-        </div>
-
-        <label className="mt-3 flex items-center justify-between py-2">
-          <span className="text-sm text-neutral-200">Pause shortcuts</span>
-          <input
-            type="checkbox"
-            checked={state.shortcutsPaused}
-            onChange={(event) => {
-              const paused = event.target.checked
-              setState({ ...state, shortcutsPaused: paused })
-              window.settingsApi.setShortcutsPaused(paused)
-            }}
-            className="h-4 w-4 accent-blue-500"
+          <ShortcutRow
+            id="captureText"
+            accelerator={state.shortcuts.captureText}
+            onRebind={rebind}
+            enabled={state.shortcutsEnabled.captureText}
+            onToggleEnabled={(enabled) => setShortcutEnabled('captureText', enabled)}
           />
-        </label>
+        </div>
+      </section>
 
+      <section className="rounded-lg border border-neutral-800 p-4">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Advanced</h2>
         <button
           type="button"
           onClick={() => window.settingsApi.openKeyboardSettings()}
-          className="mt-3 block text-xs text-blue-400 hover:text-blue-300"
+          className="block text-xs text-blue-400 hover:text-blue-300"
         >
           Take over the system screenshot shortcuts (⌘⇧3/4/5) →
         </button>

@@ -79,7 +79,11 @@ const trayHandlers: TrayMenuHandlers = {
 
 function currentTrayState(): TrayMenuState {
   const store = getSettingsStore()
-  return { shortcuts: store.get('shortcuts'), shortcutsPaused: store.get('shortcutsPaused') }
+  return {
+    shortcuts: store.get('shortcuts'),
+    shortcutsEnabled: store.get('shortcutsEnabled'),
+    shortcutsPaused: store.get('shortcutsPaused')
+  }
 }
 
 if (!gotSingleInstanceLock) {

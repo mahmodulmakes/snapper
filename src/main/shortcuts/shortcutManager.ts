@@ -48,7 +48,9 @@ function registerAll(): void {
   }
 
   const bindings = getSettingsStore().get('shortcuts')
+  const enabled = getSettingsStore().get('shortcutsEnabled')
   for (const id of Object.keys(bindings) as ShortcutActionId[]) {
+    if (enabled[id] === false) continue
     registerOne(id, bindings[id])
   }
   notifyStateChange()
@@ -104,5 +106,12 @@ export function trySetShortcut(id: ShortcutActionId, accelerator: string): boole
 
 export function setShortcutsPaused(paused: boolean): void {
   getSettingsStore().set('shortcutsPaused', paused)
+  registerAll()
+}
+
+/** Per-feature on/off — independent of the global pause switch above (BUILD-SPEC.md §2.4.1's Capture Text toggle). */
+export function setShortcutEnabled(id: ShortcutActionId, enabled: boolean): void {
+  const store = getSettingsStore()
+  store.set('shortcutsEnabled', { ...store.get('shortcutsEnabled'), [id]: enabled })
   registerAll()
 }

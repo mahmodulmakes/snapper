@@ -4,6 +4,7 @@ export interface SettingsApi {
   getState: () => Promise<SettingsState>
   setLaunchAtLogin: (enabled: boolean) => void
   setShortcutsPaused: (paused: boolean) => void
+  setShortcutEnabled: (id: ShortcutActionId, enabled: boolean) => void
   setShortcut: (id: ShortcutActionId, accelerator: string) => Promise<boolean>
   openKeyboardSettings: () => void
 }
