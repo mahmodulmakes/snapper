@@ -129,21 +129,21 @@ export default function App(): JSX.Element {
 
   if (!state) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white text-sm text-neutral-500 dark:bg-neutral-900">
+      <div className="flex h-screen items-center justify-center bg-white text-sm text-neutral-600 dark:text-neutral-500 dark:bg-neutral-900">
         {loadError ? 'Could not load settings.' : 'Loading…'}
       </div>
     )
   }
 
   return (
-    <div className="h-screen overflow-y-auto bg-white px-5 py-5 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
+    <main className="h-screen overflow-y-auto bg-white px-5 py-5 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
       <section className="mb-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">General</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-500">General</h2>
 
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm text-neutral-800 dark:text-neutral-200">Launch at login</div>
-            <div className="mt-0.5 text-xs text-neutral-500">Automatically start Snapper when you log in.</div>
+            <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-500">Automatically start Snapper when you log in.</div>
           </div>
           <Toggle
             checked={state.launchAtLogin}
@@ -158,7 +158,7 @@ export default function App(): JSX.Element {
         <div className="mt-4 flex items-center justify-between">
           <div>
             <div className="text-sm text-neutral-800 dark:text-neutral-200">Pause shortcuts</div>
-            <div className="mt-0.5 text-xs text-neutral-500">Temporarily disable every capture shortcut.</div>
+            <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-500">Temporarily disable every capture shortcut.</div>
           </div>
           <Toggle
             checked={state.shortcutsPaused}
@@ -173,7 +173,7 @@ export default function App(): JSX.Element {
         <div className="mt-4 flex items-center justify-between">
           <div>
             <div className="text-sm text-neutral-800 dark:text-neutral-200">Save screenshots to disk</div>
-            <div className="mt-0.5 text-xs text-neutral-500">
+            <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-500">
               Also save a copy of every screenshot to a folder on your Mac.
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function App(): JSX.Element {
       </section>
 
       <section className="mb-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Shortcuts</h2>
+        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-500">Shortcuts</h2>
         <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
           <ShortcutRow id="captureArea" accelerator={state.shortcuts.captureArea} onRebind={rebind} />
           <ShortcutRow id="captureFullScreen" accelerator={state.shortcuts.captureFullScreen} onRebind={rebind} />
@@ -219,7 +219,7 @@ export default function App(): JSX.Element {
       </section>
 
       <section className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Advanced</h2>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-500">Advanced</h2>
         <button
           type="button"
           onClick={() => window.settingsApi.openKeyboardSettings()}
@@ -227,10 +227,10 @@ export default function App(): JSX.Element {
         >
           Take over the system screenshot shortcuts (⌘⇧3/4/5) →
         </button>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-500">
           Opens System Settings → Keyboard → Shortcuts, where you can disable Apple's screenshot shortcuts yourself.
         </p>
       </section>
-    </div>
+    </main>
   )
 }
