@@ -5,7 +5,7 @@ import { buildAccelerator, formatAcceleratorForDisplay, type ModifierState } fro
 const SHORTCUT_LABELS: Record<ShortcutActionId, string> = {
   captureArea: 'Capture Area',
   captureFullScreen: 'Capture Full Screen',
-  captureText: 'Capture Text (beta)'
+  captureText: 'Capture Text'
 }
 
 interface ShortcutRowProps {

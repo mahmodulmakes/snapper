@@ -71,6 +71,7 @@ function togglePauseShortcuts(): void {
 const trayHandlers: TrayMenuHandlers = {
   onCaptureArea: captureArea,
   onCaptureFullScreen: captureFullScreen,
+  onCaptureText: captureText,
   onOpenSaveFolder: openSaveFolder,
   onOpenSettings: showSettingsWindow,
   onTogglePauseShortcuts: togglePauseShortcuts

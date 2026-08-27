@@ -4,6 +4,7 @@ import type { ShortcutBindings } from '../../shared/types'
 export interface TrayMenuHandlers {
   onCaptureArea: () => void
   onCaptureFullScreen: () => void
+  onCaptureText: () => void
   onOpenSaveFolder: () => void
   onOpenSettings: () => void
   onTogglePauseShortcuts: () => void
@@ -22,6 +23,7 @@ export function buildTrayMenu(handlers: TrayMenuHandlers, state: TrayMenuState):
       accelerator: state.shortcuts.captureFullScreen,
       click: handlers.onCaptureFullScreen
     },
+    { label: 'Capture Text', accelerator: state.shortcuts.captureText, click: handlers.onCaptureText },
     { type: 'separator' },
     { label: 'Open Save Folder', click: handlers.onOpenSaveFolder },
     { type: 'separator' },
