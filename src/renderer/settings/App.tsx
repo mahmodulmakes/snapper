@@ -185,8 +185,11 @@ export default function App(): JSX.Element {
           />
         </div>
         {state.saveToDisk && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300">
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span
+              className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-neutral-500"
+              title={state.saveDirectory}
+            >
               {state.saveDirectory}
             </span>
             <button
