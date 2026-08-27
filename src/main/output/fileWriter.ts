@@ -17,17 +17,13 @@ export function buildScreenshotFilename(date: Date): string {
   return `Screenshot ${datePart} at ${timePart}.png`
 }
 
-/**
- * Fixed default save location for v1.0 (BUILD-SPEC.md §2.4/§4.4) —
- * configurable save folder is a fast-follow, not required for launch.
- */
+/** The out-of-the-box save location, before the user configures their own (BUILD-SPEC.md §2.4/§4.4). Also used as the settings default. */
 export function defaultSaveDirectory(): string {
   return join(app.getPath('pictures'), 'Screenshots')
 }
 
-/** Copies a capture into the default save folder under a timestamped name. */
-export async function saveScreenshotFile(sourcePath: string, date: Date = new Date()): Promise<string> {
-  const dir = defaultSaveDirectory()
+/** Copies a capture into `dir` (the user's configured save folder, CLAUDE.md Hard Rule 7) under a timestamped name. */
+export async function saveScreenshotFile(sourcePath: string, dir: string, date: Date = new Date()): Promise<string> {
   await mkdir(dir, { recursive: true })
   const destPath = join(dir, buildScreenshotFilename(date))
   await copyFile(sourcePath, destPath)

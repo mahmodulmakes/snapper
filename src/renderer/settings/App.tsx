@@ -167,6 +167,41 @@ export default function App(): JSX.Element {
             label="Pause shortcuts"
           />
         </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-neutral-200">Save screenshots to disk</div>
+            <div className="mt-0.5 text-xs text-neutral-500">
+              Also save a copy of every screenshot to a folder on your Mac.
+            </div>
+          </div>
+          <Toggle
+            checked={state.saveToDisk}
+            onChange={(enabled) => {
+              setState({ ...state, saveToDisk: enabled })
+              window.settingsApi.setSaveToDisk(enabled)
+            }}
+            label="Save screenshots to disk"
+          />
+        </div>
+        {state.saveToDisk && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300">
+              {state.saveDirectory}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                window.settingsApi.chooseSaveFolder().then((chosen) => {
+                  if (chosen) setState((prev) => (prev ? { ...prev, saveDirectory: chosen } : prev))
+                })
+              }}
+              className="shrink-0 rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-100 hover:bg-neutral-700"
+            >
+              Choose…
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="mb-4 rounded-lg border border-neutral-800 p-4">

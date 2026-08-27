@@ -28,6 +28,8 @@ export type CaptureMode = 'region' | 'text'
 /** Main -> renderer, sent right before an overlay window is shown, so the renderer knows which flow's mouse-up behavior to run. */
 export interface OverlayResetPayload {
   mode: CaptureMode
+  /** Whether Settings has disk saving turned on — the region-capture toolbar hides its Save button entirely when this is false. */
+  saveToDisk: boolean
 }
 
 /** Renderer -> main: a drag started in this window, at this local anchor point. */
@@ -69,6 +71,8 @@ export interface SettingsState {
   launchAtLogin: boolean
   shortcuts: ShortcutBindings
   shortcutsPaused: boolean
+  saveToDisk: boolean
+  saveDirectory: string
 }
 
 /** Inline annotation drawing tools (BUILD-SPEC.md §2.4.2/§4.5a) — outline shapes only, no fill tools. */

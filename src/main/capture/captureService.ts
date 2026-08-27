@@ -8,6 +8,7 @@ import { stitchSegments } from './stitcher'
 import { compositeAnnotations } from '../output/annotationOverlay'
 import { copyImageFileToClipboard } from '../output/clipboard'
 import { saveScreenshotFile } from '../output/fileWriter'
+import { getSettingsStore } from '../settings/store'
 import { logger } from '../logger'
 import { notifyFailure as notifyFailureBase } from '../notify'
 import type { AnnotationShape, AnnotationShapePixels, RectInPoints } from '../../shared/types'
@@ -113,7 +114,9 @@ export async function captureToTemp(rectInPoints: RectInPoints, shapes: Annotati
 /**
  * Orchestrates one capture end-to-end: screencapture -> clipboard -> disk.
  * Used for captures with no toolbar decision point (e.g. full-screen), where
- * both outputs on by default (BUILD-SPEC.md §4.4) is the right behavior.
+ * both outputs on by default (BUILD-SPEC.md §4.4) is the right behavior —
+ * unless the user has turned off disk saving entirely in Settings, in which
+ * case this is clipboard-only.
  */
 export async function captureRectAndOutput(rectInPoints: RectInPoints): Promise<CaptureResult | null> {
   const captured = await captureToTemp(rectInPoints)
@@ -126,8 +129,10 @@ export async function captureRectAndOutput(rectInPoints: RectInPoints): Promise<
       notifyFailure(`Captured, but couldn't copy to clipboard: ${String(err)}`)
     }
 
+    if (!getSettingsStore().get('saveToDisk')) return null
+
     try {
-      const savedPath = await saveScreenshotFile(captured.tempPath)
+      const savedPath = await saveScreenshotFile(captured.tempPath, getSettingsStore().get('saveDirectory'))
       logger.info(`Capture saved to ${savedPath}`)
       return { savedPath }
     } catch (err) {
@@ -154,13 +159,24 @@ export async function captureRectAndCopy(rectInPoints: RectInPoints, shapes: Ann
   }
 }
 
-/** The floating toolbar's "Save" button (BUILD-SPEC.md §4.3) — disk only. `shapes` are whatever was drawn inline on the overlay (§2.4.2) before Save was clicked. */
+/**
+ * The floating toolbar's "Save" button (BUILD-SPEC.md §4.3) — disk only.
+ * `shapes` are whatever was drawn inline on the overlay (§2.4.2) before Save
+ * was clicked. The overlay only shows this button when `saveToDisk` is on
+ * (see `renderer/overlay/main.ts`'s `resetSelectionState`) — this check is
+ * just defense against stale renderer state, not the primary gate.
+ */
 export async function captureRectAndSave(rectInPoints: RectInPoints, shapes: AnnotationShape[] = []): Promise<CaptureResult | null> {
+  if (!getSettingsStore().get('saveToDisk')) {
+    logger.error('captureRectAndSave called while saveToDisk is off — the toolbar should not have shown Save.')
+    return null
+  }
+
   const captured = await captureToTemp(rectInPoints, shapes)
   if (!captured) return null
 
   try {
-    const savedPath = await saveScreenshotFile(captured.tempPath)
+    const savedPath = await saveScreenshotFile(captured.tempPath, getSettingsStore().get('saveDirectory'))
     logger.info(`Capture saved to ${savedPath}`)
     return { savedPath }
   } catch (err) {

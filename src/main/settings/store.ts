@@ -1,11 +1,14 @@
 import Store from 'electron-store'
 import { DEFAULT_SHORTCUTS } from '../shortcuts/defaults'
+import { defaultSaveDirectory } from '../output/fileWriter'
 import type { ShortcutActionId, ShortcutBindings } from '../../shared/types'
 
 export interface SettingsSchema {
   launchAtLogin: boolean
   shortcuts: ShortcutBindings
   shortcutsPaused: boolean
+  saveToDisk: boolean
+  saveDirectory: string
 }
 
 let store: Store<SettingsSchema> | null = null
@@ -40,7 +43,9 @@ export function getSettingsStore(): Store<SettingsSchema> {
       defaults: {
         launchAtLogin: true,
         shortcuts: DEFAULT_SHORTCUTS,
-        shortcutsPaused: false
+        shortcutsPaused: false,
+        saveToDisk: true,
+        saveDirectory: defaultSaveDirectory()
       }
     })
     backfillMissingShortcuts(store)

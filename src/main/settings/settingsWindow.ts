@@ -51,3 +51,8 @@ export function showSettingsWindow(): void {
 export function closeSettingsWindow(): void {
   win?.close()
 }
+
+/** Parent window for dialogs launched from Settings (e.g. the save-folder picker). */
+export function getSettingsWindowHandle(): BrowserWindow | null {
+  return win
+}

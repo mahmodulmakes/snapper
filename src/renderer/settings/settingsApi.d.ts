@@ -5,6 +5,8 @@ export interface SettingsApi {
   setLaunchAtLogin: (enabled: boolean) => void
   setShortcutsPaused: (paused: boolean) => void
   setShortcut: (id: ShortcutActionId, accelerator: string) => Promise<boolean>
+  setSaveToDisk: (enabled: boolean) => void
+  chooseSaveFolder: () => Promise<string | null>
   openKeyboardSettings: () => void
 }
 

@@ -17,6 +17,8 @@ export const IPC = {
   SETTINGS_SET_LAUNCH_AT_LOGIN: 'settings:set-launch-at-login',
   SETTINGS_SET_SHORTCUTS_PAUSED: 'settings:set-shortcuts-paused',
   SETTINGS_SET_SHORTCUT: 'settings:set-shortcut',
+  SETTINGS_SET_SAVE_TO_DISK: 'settings:set-save-to-disk',
+  SETTINGS_CHOOSE_SAVE_FOLDER: 'settings:choose-save-folder',
   SETTINGS_OPEN_KEYBOARD_SETTINGS: 'settings:open-keyboard-settings',
   TEXT_CAPTURE_START: 'text-capture:start',
   TEXT_CAPTURE_RESULT: 'text-capture:result',

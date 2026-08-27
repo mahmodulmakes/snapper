@@ -21,6 +21,7 @@ import type {
 const canvas = document.getElementById('overlay-canvas')
 const ctx = canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : null
 const toolbar = document.getElementById('toolbar')
+const toolbarSaveBtn = document.getElementById('toolbar-save')
 const textStatus = document.getElementById('text-status')
 const textToolbar = document.getElementById('text-toolbar')
 const textToolbarCopySelectionBtn = document.getElementById('text-toolbar-copy-selection')
@@ -32,6 +33,8 @@ let liveRect: RectInPoints | null = null
 let selection: RectInPoints | null = null
 let isToolbarHost = false
 let captureMode: CaptureMode = 'region'
+/** Settings' "Save screenshots to disk" toggle — hides the toolbar's Save button entirely when off (a button that can't write anything must not appear). */
+let saveToDisk = true
 // Inline annotation (BUILD-SPEC.md §2.4.2/§4.5a) — shapes drawn directly on
 // the overlay over the finalized selection. Tied to the selection's
 // lifetime: any re-finalize (a new drag, a nudge, Redo Selection) clears
@@ -184,6 +187,8 @@ function resetSelectionState(payload: OverlayResetPayload): void {
   selection = null
   isToolbarHost = false
   captureMode = payload.mode
+  saveToDisk = payload.saveToDisk
+  toolbarSaveBtn?.classList.toggle('hidden', !saveToDisk)
   shapes = []
   drawingShape = null
   if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'crosshair'

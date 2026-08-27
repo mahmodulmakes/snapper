@@ -13,6 +13,7 @@ import {
 import { activateApp, getFrontmostAppBundleId } from '../capture/frontmostApp'
 import { captureTextInRegion } from '../capture/textCaptureService'
 import { copyTextToClipboard } from '../output/clipboard'
+import { getSettingsStore } from '../settings/store'
 import {
   getFinalizedSelection,
   handleDragEnd,
@@ -337,12 +338,13 @@ export async function showOverlays(mode: CaptureMode = 'region'): Promise<void> 
   captureMode = mode
 
   frontmostAppBundleIdAtHotkey = await getFrontmostAppBundleId()
+  const saveToDisk = getSettingsStore().get('saveToDisk')
 
   for (const entry of overlays) {
     // Clear any selection left over from the previous capture before the
     // window becomes visible again — these windows are hidden, not
     // destroyed, so renderer state persists across show/hide cycles.
-    entry.window.webContents.send(IPC.OVERLAY_RESET, { mode })
+    entry.window.webContents.send(IPC.OVERLAY_RESET, { mode, saveToDisk })
     entry.window.show()
     entry.window.focus()
   }

@@ -1,7 +1,6 @@
 import { app, screen, shell } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import { captureRectAndOutput } from './capture/captureService'
-import { defaultSaveDirectory } from './output/fileWriter'
 import { initOnboarding, showOnboardingWindow, teardownOnboarding } from './permissions/onboardingWindow'
 import { isScreenRecordingGranted } from './permissions/screenRecording'
 import { initSettingsIpc, teardownSettingsIpc } from './settings/settingsIpc'
@@ -53,7 +52,7 @@ function captureFullScreen(): void {
 }
 
 function openSaveFolder(): void {
-  const dir = defaultSaveDirectory()
+  const dir = getSettingsStore().get('saveDirectory')
   mkdir(dir, { recursive: true })
     .then(() => shell.openPath(dir))
     .then((err) => {
