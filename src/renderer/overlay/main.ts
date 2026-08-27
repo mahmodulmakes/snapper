@@ -394,6 +394,11 @@ function onTextCaptureResult(payload: TextCaptureResultPayload): void {
   window.overlayApi.copyTextCapture(textLayer.getSelectedText())
   textLayer.clear()
   selection = null
+  // Without this, the canvas keeps showing the last-drawn frame (this
+  // selection's highlighted rect/words) until the window actually hides —
+  // dismiss() is an async IPC round-trip to main, so that stale frame is
+  // genuinely visible for a beat, not just theoretically possible.
+  render()
   window.overlayApi.dismiss()
 }
 
