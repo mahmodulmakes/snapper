@@ -38,15 +38,11 @@ interface ShortcutRowProps {
   id: ShortcutActionId
   accelerator: string
   onRebind: (id: ShortcutActionId, accelerator: string) => Promise<boolean>
-  /** Only Capture Text has this for now (BUILD-SPEC.md §2.4.1's beta track) — Capture Area/Full Screen are core to the app, not optional. */
-  enabled?: boolean
-  onToggleEnabled?: (enabled: boolean) => void
 }
 
-function ShortcutRow({ id, accelerator, onRebind, enabled, onToggleEnabled }: ShortcutRowProps): JSX.Element {
+function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Element {
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const hasEnabledToggle = onToggleEnabled !== undefined
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -86,9 +82,7 @@ function ShortcutRow({ id, accelerator, onRebind, enabled, onToggleEnabled }: Sh
 
   return (
     <div className="flex items-center justify-between py-2.5">
-      <span className={`text-sm ${enabled === false ? 'text-neutral-500' : 'text-neutral-200'}`}>
-        {SHORTCUT_LABELS[id]}
-      </span>
+      <span className="text-sm text-neutral-200">{SHORTCUT_LABELS[id]}</span>
       <div className="flex items-center gap-3">
         {error && <span className="max-w-[220px] text-right text-xs text-red-400">{error}</span>}
         <button
@@ -99,9 +93,7 @@ function ShortcutRow({ id, accelerator, onRebind, enabled, onToggleEnabled }: Sh
           }}
           onKeyDown={handleKeyDown}
           onBlur={() => setRecording(false)}
-          className={`min-w-[96px] rounded-md border px-3 py-1.5 font-mono text-sm transition-opacity ${
-            enabled === false ? 'opacity-40' : ''
-          } ${
+          className={`min-w-[96px] rounded-md border px-3 py-1.5 font-mono text-sm ${
             recording
               ? 'border-blue-500 bg-blue-500/10 text-blue-300'
               : 'border-neutral-700 bg-neutral-800 text-neutral-100 hover:bg-neutral-700'
@@ -109,9 +101,6 @@ function ShortcutRow({ id, accelerator, onRebind, enabled, onToggleEnabled }: Sh
         >
           {recording ? 'Press keys…' : formatAcceleratorForDisplay(accelerator)}
         </button>
-        {hasEnabledToggle && (
-          <Toggle checked={enabled ?? true} onChange={onToggleEnabled} label={`${SHORTCUT_LABELS[id]} enabled`} />
-        )}
       </div>
     </div>
   )
@@ -134,11 +123,6 @@ export default function App(): JSX.Element {
       setState((prev) => (prev ? { ...prev, shortcuts: { ...prev.shortcuts, [id]: accelerator } } : prev))
     }
     return ok
-  }, [])
-
-  const setShortcutEnabled = useCallback((id: ShortcutActionId, enabled: boolean) => {
-    setState((prev) => (prev ? { ...prev, shortcutsEnabled: { ...prev.shortcutsEnabled, [id]: enabled } } : prev))
-    window.settingsApi.setShortcutEnabled(id, enabled)
   }, [])
 
   if (!state) {
@@ -165,21 +149,20 @@ export default function App(): JSX.Element {
             label="Launch at login"
           />
         </div>
+        <p className="mt-1 text-xs text-neutral-500">Automatically start Snapper when you log in.</p>
 
-        <div className="flex items-center justify-between py-1.5">
-          <span className="text-sm text-neutral-200">Pause all shortcuts</span>
+        <div className="mt-3 flex items-center justify-between py-1.5">
+          <span className="text-sm text-neutral-200">Pause shortcuts</span>
           <Toggle
             checked={state.shortcutsPaused}
             onChange={(paused) => {
               setState({ ...state, shortcutsPaused: paused })
               window.settingsApi.setShortcutsPaused(paused)
             }}
-            label="Pause all shortcuts"
+            label="Pause shortcuts"
           />
         </div>
-        <p className="mt-1 text-xs text-neutral-500">
-          Temporarily disable every capture shortcut — useful when recording your screen or presenting.
-        </p>
+        <p className="mt-1 text-xs text-neutral-500">Temporarily disable every capture shortcut.</p>
       </section>
 
       <section className="mb-4 rounded-lg border border-neutral-800 p-4">
@@ -187,13 +170,7 @@ export default function App(): JSX.Element {
         <div className="divide-y divide-neutral-800">
           <ShortcutRow id="captureArea" accelerator={state.shortcuts.captureArea} onRebind={rebind} />
           <ShortcutRow id="captureFullScreen" accelerator={state.shortcuts.captureFullScreen} onRebind={rebind} />
-          <ShortcutRow
-            id="captureText"
-            accelerator={state.shortcuts.captureText}
-            onRebind={rebind}
-            enabled={state.shortcutsEnabled.captureText}
-            onToggleEnabled={(enabled) => setShortcutEnabled('captureText', enabled)}
-          />
+          <ShortcutRow id="captureText" accelerator={state.shortcuts.captureText} onRebind={rebind} />
         </div>
       </section>
 

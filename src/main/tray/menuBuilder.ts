@@ -1,5 +1,5 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron'
-import type { ShortcutActionId, ShortcutBindings } from '../../shared/types'
+import type { ShortcutBindings } from '../../shared/types'
 
 export interface TrayMenuHandlers {
   onCaptureArea: () => void
@@ -12,7 +12,6 @@ export interface TrayMenuHandlers {
 
 export interface TrayMenuState {
   shortcuts: ShortcutBindings
-  shortcutsEnabled: Record<ShortcutActionId, boolean>
   shortcutsPaused: boolean
 }
 
@@ -24,12 +23,7 @@ export function buildTrayMenu(handlers: TrayMenuHandlers, state: TrayMenuState):
       accelerator: state.shortcuts.captureFullScreen,
       click: handlers.onCaptureFullScreen
     },
-    // Omitted entirely rather than shown disabled/grayed — the menu is
-    // already fully rebuilt on every state change (updateTrayMenu), so
-    // there's no simpler-disabled-state to preserve by keeping the row.
-    ...(state.shortcutsEnabled.captureText
-      ? [{ label: 'Capture Text', accelerator: state.shortcuts.captureText, click: handlers.onCaptureText }]
-      : []),
+    { label: 'Capture Text', accelerator: state.shortcuts.captureText, click: handlers.onCaptureText },
     { type: 'separator' },
     { label: 'Open Save Folder', click: handlers.onOpenSaveFolder },
     { type: 'separator' },
