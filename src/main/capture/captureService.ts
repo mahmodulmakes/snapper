@@ -23,7 +23,7 @@ export interface CaptureResult {
   savedPath: string
 }
 
-interface TempCapture {
+export interface TempCapture {
   tempDir: string
   tempPath: string
 }
@@ -118,6 +118,16 @@ export async function captureRectAndCopy(rectInPoints: RectInPoints): Promise<vo
   } finally {
     await rm(captured.tempDir, { recursive: true, force: true })
   }
+}
+
+/**
+ * The floating toolbar's "Annotate" button (BUILD-SPEC.md §2.4.2) — captures
+ * to a temp file but does NOT clean it up. Unlike Copy/Save, the output isn't
+ * known yet: the caller (main/editor/editorWindow.ts) owns the temp dir's
+ * lifecycle until the user exports (copy/save) or cancels from the editor.
+ */
+export async function captureRectForAnnotation(rectInPoints: RectInPoints): Promise<TempCapture | null> {
+  return captureToTemp(rectInPoints)
 }
 
 /** The floating toolbar's "Save" button (BUILD-SPEC.md §4.3) — disk only. */

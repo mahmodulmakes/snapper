@@ -1,6 +1,7 @@
 import { app, screen, shell } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import { captureRectAndOutput } from './capture/captureService'
+import { teardownEditor } from './editor/editorWindow'
 import { defaultSaveDirectory } from './output/fileWriter'
 import { initOnboarding, showOnboardingWindow, teardownOnboarding } from './permissions/onboardingWindow'
 import { isScreenRecordingGranted } from './permissions/screenRecording'
@@ -142,5 +143,6 @@ if (!gotSingleInstanceLock) {
     teardownSettingsIpc()
     teardownShortcuts()
     closeSettingsWindow()
+    teardownEditor()
   })
 }

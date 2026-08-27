@@ -86,7 +86,7 @@ If monetization becomes relevant later, revisit it as its own scoping conversati
 
 **Deferred — not in v1.0, may return later.** These have real design thinking already written up in this spec (§3.5, §4.5, §4.8) — that content is preserved as reference, not deleted, but none of it gets built until it's explicitly back in scope:
 
-- Annotation editor (arrows, shapes, text, blur/pixelate, crop, etc.) — §4.5
+- **Full** non-destructive annotation editor (per-shape move/resize after placement, layers, text, blur/pixelate, crop, undo/redo history) — §4.5. A **minimal** inline subset (arrows/boxes/ovals/lines, color picker, bake-on-export) is in scope as its own lightweight track — see §2.4.2.
 - Scrolling capture — §3.5, §4.5 not applicable; see §3.5
 - Screenshot history — §4.8
 - "Pin to screen" floating pinned captures
@@ -98,8 +98,26 @@ If monetization becomes relevant later, revisit it as its own scoping conversati
 - Screen recording / GIF — doubles engineering surface, pulls in codec/audio-permission/file-size problems.
 - Cloud upload and shareable links — contradicts the local-only positioning and adds hosting cost, abuse handling, GDPR obligations.
 - Windows or Linux — the whole product thesis is macOS-native feel.
-- OCR — needs a native Vision bridge; revisit only alongside a real editor.
 - Background/beautification presets — Xnapper owns this; not this product's fight.
+
+### 2.4.1 Scope amendment — Universal Text Capture (2026-08-27)
+
+OCR was previously listed here as explicitly out of scope, gated on the (still-deferred) annotation editor returning first. **Superseded at explicit user request.** Universal Text Capture — an Apple Live Text–style "select text directly off the screen" tool — is now in scope as its own **beta feature track**, independent of the editor and independent of shipping v1.0:
+
+- It does **not** unblock or require the annotation editor, scrolling capture, or history — those stay deferred exactly as before.
+- It does **not** block Phase 7 (Ship). Phase 7's signing/notarization/DMG work stays parked; this track is built and tested in dev/beta first.
+- It stays compliant with Hard Rule 1 (no network beyond the update feed): recognition runs entirely on-device via Apple's Vision framework (`VNRecognizeTextRequest`), the same on-device tech behind macOS's own Live Text. No cloud OCR service, ever.
+- It introduces one new piece of native surface — a small compiled Swift helper the main process shells out to, living entirely inside `src/main/capture/` per Hard Rule 2 — see §3.10 and §4.9.
+
+### 2.4.2 Scope amendment — Minimal Inline Annotation (2026-08-27)
+
+The annotation editor was previously deferred wholesale, gated on returning as the **full** non-destructive document model described in §4.5. **Partially superseded, at explicit user request.** A minimal inline annotation tool — arrows, rectangles, ovals, straight lines, and a color picker, drawn onto a captured screenshot before Copy/Save — is now in scope as its own lightweight track, independent of the full editor:
+
+- It does **not** implement §4.5's non-destructive document model: no per-shape move/resize after placement, no layers, no crop, no blur/pixelate. Shapes are committed to an in-memory list as drawn, redrawn over the base image every frame, with a simple last-shape-only Undo — real until export, but not a full document model. That fuller model (and blur/pixelate, and crop) stays deferred exactly as before.
+- It does **not** unblock scrolling capture, history, or pin windows — those stay deferred.
+- Hard Rule 6 (blur/pixelate must be destructive on export) doesn't apply yet — this track has no redaction tool, only outline shapes. It must still be honored whenever blur/pixelate actually lands.
+- No new network access, no new permission, no dependency added (Hard Rule 9): color selection uses the native HTML `<input type="color">`, already bundled inside Chromium at zero cost, plus a small fixed swatch row.
+- New architectural surface: a real editor `BrowserWindow` (`main/editor/editorWindow.ts`), contextIsolation/sandbox/explicit preload per Hard Rule 4 — reusing the `src/renderer/editor/` + `src/preload/editor.preload.ts` scaffold that had sat as an unwired Phase-1 stub. See §4.10.
 
 ---
 
@@ -273,6 +291,31 @@ All main↔renderer traffic goes through a narrow, typed preload API. Renderers 
 
 Because "no telemetry" is a marketing claim, it must be literally true: the only outbound request in the entire app is the update-feed check, listed in the privacy policy. No analytics SDK, no crash reporter that phones home without consent, no font CDN, no license/account call — there is no license.
 
+### 3.10 Universal Text Capture — Vision bridge (beta track, §2.4.1)
+
+**Recognition engine: Apple's Vision framework (`VNRecognizeTextRequest`), on-device only.** This is the only option that keeps Hard Rule 1 (no network beyond the update feed) true — every cloud OCR API is disqualified by definition.
+
+**Bridge shape, following the existing `screencapture.ts` pattern (§3.6):** a small compiled Swift CLI helper (not an npm package — Hard Rule 9), invoked from the main process via `child_process` exactly like `screencapture` is today. It takes an image, runs `VNImageRequestHandler` + `VNRecognizeTextRequest`, and prints recognized lines/words plus bounding boxes as JSON on stdout. All of this lives in `src/main/capture/` (Hard Rule 2) — a new `textRecognition.ts` alongside `screencapture.ts`, plus the compiled helper binary itself shipped as an `extraResource`.
+
+**Coordinate space — a new wrinkle beyond §3.2.** Vision returns bounding boxes normalized (0–1) with **origin at bottom-left**, not Electron's top-left. Converting that into on-screen points needs: (1) flip the y-axis, (2) scale by the captured region's pixel dimensions, (3) offset by the region's origin in points, (4) divide by that display's `scaleFactor`. Per Hard Rule 3, this conversion must not scatter `scaleFactor` math outside `displayManager.ts` — Phase 8's spike step decides whether this becomes new exported functions in `displayManager.ts` itself, or a sibling module that calls into it for the scaleFactor step only. Flagged as an open decision, not resolved here.
+
+**No new permission.** Vision operates on pixels the app already captured under the existing Screen Recording permission — confirm this against Apple's docs in the Phase 8 spike before relying on it.
+
+### 4.9 Universal Text Capture (beta track, §2.4.1)
+
+Live-Text-style "select text directly off the screen," without saving a file first.
+
+1. User triggers a dedicated shortcut (its own default, distinct from region/full-screen capture and from macOS's `⌘⇧3/4/5` — §4.6's rule applies here too).
+2. Same crosshair/drag-select UX as region capture (§4.2), reusing the pre-warmed overlay pool — no new window type.
+3. On mouse-up: the region is captured to an in-memory buffer (never written outside the app's temp directory, per Hard Rule 7) and sent through the Vision bridge (§3.10). No thumbnail, no visible file.
+4. Recognized words are rendered as a selectable text layer positioned exactly over the source pixels — click-drag highlights word/line ranges; a whole-region "select all" is available too.
+5. Copy (`⌘C` or a button) writes the selected string to the clipboard via `main/output/clipboard.ts` (needs a `writeText` alongside its existing `writeImage`).
+6. `Esc` cancels and restores focus, reusing `frontmostApp.ts` (§4.2 step 7) rather than reimplementing it.
+
+No text found in a region, or a Vision/helper failure, must produce a visible message — never a silently empty selection (per CLAUDE.md's no-silent-failure rule).
+
+Deferred within this track, not built now: OCR-based secret redaction (that stays tied to the annotation editor per §4.5's stretch note), multi-language tuning beyond Vision's defaults, handwriting/table-structure recognition, and any signing/notarization of the new helper binary (belongs to Phase 7).
+
 ---
 
 ## 4. Feature Specification
@@ -332,9 +375,9 @@ Both can be on at once (default: both):
 
 Settings: format (PNG/JPEG), JPEG quality.
 
-### 4.5 Annotation editor — DEFERRED, not in v1.0 (§2.4)
+### 4.5 Full annotation editor — DEFERRED, not in v1.0 (§2.4)
 
-Kept here as reference design work for whenever this comes back into scope.
+Kept here as reference design work for whenever this comes back into scope. Not what §4.5a below builds — this is the fuller document-model version.
 
 Tools: select/move, arrow, line, rectangle, ellipse, freehand, text, highlighter, blur, pixelate, counter badge (auto-incrementing 1,2,3…), crop, spotlight/dim-outside.
 
@@ -348,6 +391,18 @@ Requirements, if/when built:
 - `⌘C` copies the flattened result, `⌘S` saves, `Esc` closes.
 
 **Possible stretch, if this returns:** run macOS Vision OCR over the image, regex for emails, API-key-shaped strings, credit cards, and IPs, and offer one-click "Redact detected secrets."
+
+### 4.5a Minimal inline annotation (in scope, §2.4.2)
+
+What actually gets built now. A lightweight alternative to §4.5 — no document model, no per-shape editing after placement, no blur/pixelate/crop/text/highlighter/counter-badge.
+
+1. Region-selection toolbar (§4.3) gains an **Annotate** button alongside Copy/Save. Clicking it captures the selection to a temp file (same pipeline as Copy/Save) and opens a dedicated editor window instead of writing output immediately.
+2. Editor window: the captured image at native resolution, a tool row (**Arrow, Box, Oval, Line**), a color row (fixed swatches + a native `<input type="color">` for anything else), **Undo**, **Cancel**, **Save**, **Copy**.
+3. Draw by click-drag on the canvas. Shapes are kept as an in-memory list and redrawn over the base image every frame — Undo pops the last shape and redraws, so it's real up until export.
+4. **Copy**/**Save** flatten the canvas (base image + every shape) to a PNG and route through the existing clipboard/file-save code paths (`main/output/clipboard.ts`, `main/output/fileWriter.ts`). **Cancel** (or `Esc`, or the window's close button) discards the temp capture with no output.
+5. `⌘Z` undo, `⌘C` copy, `Esc` cancel — mirrors §4.5's shortcut spirit without the rest of that scope.
+
+Not built in this track: shape restyle-after-placement, layers, crop, text, blur/pixelate, per-tool style memory, unbounded undo. Any of those graduating in means graduating into §4.5's full model, not extending this one in place.
 
 ### 4.6 Shortcuts
 
@@ -419,6 +474,12 @@ Empty states, error states, app icon, onboarding polish.
 Developer ID signing, hardened runtime, entitlements, notarization + stapling, DMG with drag-to-Applications, `electron-updater` feed on S3/R2, privacy policy, landing page.
 
 **Total: roughly 6–8 weeks** to a credible free v1.0.
+
+### Phase 8 — Universal Text Capture (beta track, §2.4.1, §4.9)
+
+Not sequenced after Phase 7 in the dependency sense — it's built and tested now, in parallel with Phase 7 sitting parked. Spikes gate this phase the same way Phase 0 gated the rest (§3.10's open coordinate-ownership question gets resolved here, not guessed at). Full breakdown tracked in `PHASES.md`.
+
+**Done when:** dragging a region over real on-screen text (a webpage, a PDF, a code editor) on both a Retina and mixed-DPI display produces an accurately-positioned, selectable text layer, and `⌘C` puts the correct string on the clipboard.
 
 ### Deferred to post-v1.0 (§2.4) — not scheduled, no phase number
 

@@ -62,3 +62,16 @@ export interface SettingsState {
   shortcuts: ShortcutBindings
   shortcutsPaused: boolean
 }
+
+/** Annotation editor's drawing tools (BUILD-SPEC.md §2.4.2) — outline shapes only, no fill tools. */
+export type EditorTool = 'arrow' | 'rectangle' | 'oval' | 'line'
+
+/** Main -> renderer: the captured PNG to annotate, base64-encoded (renderer has no `fs` access, per Hard Rule 5). */
+export interface EditorImagePayload {
+  dataUrl: string
+}
+
+/** Renderer -> main: the flattened, annotated PNG to write out. */
+export interface EditorExportPayload {
+  pngDataUrl: string
+}

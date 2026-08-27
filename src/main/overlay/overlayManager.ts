@@ -1,10 +1,11 @@
 import { BrowserWindow, ipcMain, screen, type Display, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { captureRectAndCopy, captureRectAndSave } from '../capture/captureService'
+import { captureRectAndCopy, captureRectAndSave, captureRectForAnnotation } from '../capture/captureService'
 import { getDesktopCaptureSourceId } from '../capture/desktopCaptureSource'
 import { originForDisplayId, overlayLocalRectToGlobalPoints } from '../capture/displayManager'
 import { activateApp, getFrontmostAppBundleId } from '../capture/frontmostApp'
+import { openEditorForCapture } from '../editor/editorWindow'
 import {
   handleDragEnd,
   handleDragModifiers,
@@ -163,6 +164,16 @@ async function handleSaveAction(event: IpcMainEvent, localRectInPoints: RectInPo
   })
 }
 
+/** Floating toolbar's Annotate button (BUILD-SPEC.md §2.4.2). */
+async function handleAnnotateAction(event: IpcMainEvent, localRectInPoints: RectInPoints): Promise<void> {
+  const globalRectInPoints = toGlobalRect(event, localRectInPoints)
+  if (!globalRectInPoints) return
+  await hideOverlaysAndRestoreFocus()
+  const captured = await captureRectForAnnotation(globalRectInPoints)
+  if (!captured) return
+  openEditorForCapture(captured)
+}
+
 /** Magnifier loupe (BUILD-SPEC.md §4.2 step 3): resolves the sender's own display's desktopCapturer source id. */
 async function handleGetCaptureSourceId(event: IpcMainInvokeEvent): Promise<string | null> {
   const entry = overlays.find((o) => o.window.webContents === event.sender)
@@ -185,6 +196,7 @@ export function initOverlayWindows(): void {
     ipcMain.on(IPC.OVERLAY_DISMISS, () => hideOverlays())
     ipcMain.on(IPC.OVERLAY_ACTION_COPY, handleCopyAction)
     ipcMain.on(IPC.OVERLAY_ACTION_SAVE, handleSaveAction)
+    ipcMain.on(IPC.OVERLAY_ACTION_ANNOTATE, handleAnnotateAction)
     ipcMain.on(IPC.OVERLAY_DRAG_START, (event, payload) => handleDragStart(overlays, event, payload))
     ipcMain.on(IPC.OVERLAY_DRAG_MODIFIERS, (_event, payload) => handleDragModifiers(overlays, payload))
     ipcMain.on(IPC.OVERLAY_DRAG_END, () => handleDragEnd(overlays))
@@ -202,6 +214,7 @@ export function teardownOverlayWindows(): void {
   ipcMain.removeAllListeners(IPC.OVERLAY_DISMISS)
   ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_COPY)
   ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_SAVE)
+  ipcMain.removeAllListeners(IPC.OVERLAY_ACTION_ANNOTATE)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_START)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_MODIFIERS)
   ipcMain.removeAllListeners(IPC.OVERLAY_DRAG_END)
