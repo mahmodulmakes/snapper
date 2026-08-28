@@ -80,3 +80,15 @@ export function drawAnnotationShape(ctx: CanvasRenderingContext2D, shape: Annota
 export function isDegenerateShape(shape: AnnotationShape): boolean {
   return Math.hypot(shape.x1 - shape.x0, shape.y1 - shape.y0) < 3
 }
+
+/**
+ * Snaps a line/arrow endpoint to horizontal or vertical relative to its
+ * start point — whichever axis has the larger raw delta wins, the other is
+ * zeroed. Used to constrain the shape to straight while Shift is held during
+ * the draw drag (main.ts recomputes this on every mousemove AND on Shift
+ * up/down, from the last raw cursor position, so toggling Shift mid-drag
+ * takes effect immediately either way).
+ */
+export function constrainToAxis(x0: number, y0: number, x1: number, y1: number): { x1: number; y1: number } {
+  return Math.abs(x1 - x0) >= Math.abs(y1 - y0) ? { x1, y1: y0 } : { x1: x0, y1 }
+}

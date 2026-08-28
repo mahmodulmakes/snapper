@@ -4,7 +4,7 @@
 // so a drag crossing a display boundary stays correct — this file only
 // reflects whatever main broadcasts and forwards raw input (mousedown/up,
 // modifier keys) back to it.
-import { drawAnnotationShape, isDegenerateShape } from './annotationShapes'
+import { constrainToAxis, drawAnnotationShape, isDegenerateShape } from './annotationShapes'
 import * as annotationToolbar from './annotationToolbar'
 import { hideLoupe, startMagnifier, stopMagnifier, updateMagnifier } from './magnifier'
 import * as textLayer from './textLayer'
@@ -44,6 +44,11 @@ let saveToDisk = true
 // track (that's the deferred full editor, §4.5).
 let shapes: AnnotationShape[] = []
 let drawingShape: AnnotationShape | null = null
+// Raw (unconstrained) cursor position for the shape currently being drawn —
+// kept separate from drawingShape.x1/y1 because those get overwritten with
+// the Shift-straightened endpoint. Without this, releasing Shift mid-drag
+// would have nothing to snap back to.
+let shapeDrawCursor: PointInPoints | null = null
 const mods = { shift: false, option: false, space: false }
 
 // Resize handles on a finalized region selection — the 4 corners + 4 edge
@@ -279,6 +284,7 @@ function resetSelectionState(payload: OverlayResetPayload): void {
   toolbarSaveBtn?.classList.toggle('hidden', !saveToDisk)
   shapes = []
   drawingShape = null
+  shapeDrawCursor = null
   if (canvas instanceof HTMLCanvasElement) canvas.style.cursor = 'crosshair'
   hideToolbar()
   hideTextStatus()
@@ -295,10 +301,28 @@ function onIdleMouseMove(event: MouseEvent): void {
   updateMagnifier(event.clientX, event.clientY)
 }
 
+/**
+ * Recomputes the in-progress shape's endpoint from the last raw cursor
+ * position — Shift-straightens (line/arrow only) when held, otherwise uses
+ * the raw position as-is. Called on every mousemove during a shape draw AND
+ * on Shift keydown/keyup, so toggling Shift mid-drag straightens or releases
+ * the shape immediately, without waiting for the next mouse movement.
+ */
+function updateDrawingShapeEndpoint(): void {
+  if (!drawingShape || !shapeDrawCursor) return
+  const { x0, y0 } = drawingShape
+  let { x: x1, y: y1 } = shapeDrawCursor
+  if (mods.shift && (drawingShape.tool === 'line' || drawingShape.tool === 'arrow')) {
+    ;({ x1, y1 } = constrainToAxis(x0, y0, x1, y1))
+  }
+  drawingShape = { ...drawingShape, x1, y1 }
+  render()
+}
+
 function onMouseMove(event: MouseEvent): void {
   if (shapeDrawing && drawingShape) {
-    drawingShape = { ...drawingShape, x1: event.clientX, y1: event.clientY }
-    render()
+    shapeDrawCursor = { x: event.clientX, y: event.clientY }
+    updateDrawingShapeEndpoint()
     return
   }
   if (textDragging) {
@@ -364,6 +388,7 @@ function onMouseDown(event: MouseEvent): void {
       shapeDrawing = true
       const color = annotationToolbar.getActiveColor()
       drawingShape = { tool, color, x0: event.clientX, y0: event.clientY, x1: event.clientX, y1: event.clientY }
+      shapeDrawCursor = { x: event.clientX, y: event.clientY }
       render()
       return
     }
@@ -412,6 +437,7 @@ function onMouseUp(): void {
       annotationToolbar.setUndoEnabled(true)
     }
     drawingShape = null
+    shapeDrawCursor = null
     render()
     return
   }
@@ -503,6 +529,7 @@ function triggerCancel(): void {
   liveRect = null
   shapes = []
   drawingShape = null
+  shapeDrawCursor = null
   resizingHandle = null
   moving = false
   dragging = false
@@ -612,7 +639,10 @@ function onKeyDown(event: KeyboardEvent): void {
     return
   }
 
-  if (event.key === 'Shift') mods.shift = true
+  if (event.key === 'Shift') {
+    mods.shift = true
+    if (shapeDrawing) updateDrawingShapeEndpoint()
+  }
   if (event.key === 'Alt') mods.option = true
   if (event.key === ' ') {
     mods.space = true
@@ -639,7 +669,10 @@ function onKeyDown(event: KeyboardEvent): void {
 }
 
 function onKeyUp(event: KeyboardEvent): void {
-  if (event.key === 'Shift') mods.shift = false
+  if (event.key === 'Shift') {
+    mods.shift = false
+    if (shapeDrawing) updateDrawingShapeEndpoint()
+  }
   if (event.key === 'Alt') mods.option = false
   if (event.key === ' ') mods.space = false
   if (dragging) {
