@@ -46,6 +46,32 @@ function selectTool(tool: AnnotationTool): void {
   onToolChange?.(activeTool)
 }
 
+/**
+ * `#annotation-color-popover` is `position: fixed` with no left/top ever
+ * set — without this, it renders at its default (0,0), the page's top-left
+ * corner, nowhere near the toggle button that opened it. Measures
+ * `offsetWidth`/`offsetHeight` AFTER the caller has already added `.visible`
+ * (display:flex), since both read as 0 while still display:none.
+ */
+function positionColorPopover(): void {
+  if (!colorPopover || !colorToggle || !container) return
+  const toggleRect = colorToggle.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+  const gap = 8
+
+  let left = containerRect.right + gap
+  if (left + colorPopover.offsetWidth > window.innerWidth) {
+    left = containerRect.left - colorPopover.offsetWidth - gap
+  }
+  left = Math.min(Math.max(left, 0), Math.max(0, window.innerWidth - colorPopover.offsetWidth))
+
+  let top = toggleRect.top + toggleRect.height / 2 - colorPopover.offsetHeight / 2
+  top = Math.min(Math.max(top, 0), Math.max(0, window.innerHeight - colorPopover.offsetHeight))
+
+  colorPopover.style.left = `${left}px`
+  colorPopover.style.top = `${top}px`
+}
+
 function selectColor(color: string): void {
   activeColor = color
   updateColorSwatch()
@@ -88,7 +114,11 @@ export function init(handlers: {
     document.getElementById(`tool-${tool}`)?.addEventListener('click', () => selectTool(tool))
   }
   undoButton?.addEventListener('click', () => onUndo?.())
-  colorToggle?.addEventListener('click', () => colorPopover?.classList.toggle('visible'))
+  colorToggle?.addEventListener('click', () => {
+    const opening = !colorPopover?.classList.contains('visible')
+    colorPopover?.classList.toggle('visible')
+    if (opening) positionColorPopover()
+  })
   buildColorPopover()
   updateToolButtonStates()
   updateColorSwatch()
