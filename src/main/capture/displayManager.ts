@@ -52,9 +52,11 @@ export interface PixelDimensions {
 /**
  * What a captured PNG's pixel dimensions should be for a rect on a display
  * with the given scaleFactor. Phase 0 spike 1 confirmed `screencapture -R`
- * takes points in and returns native (scaleFactor-multiplied) pixels out —
- * this is for validating that a capture's actual output matches, not for
- * building the `-R` argument itself (that stays in points, unmodified).
+ * takes points in and returns native (scaleFactor-multiplied) pixels out.
+ * Used to compute capture-plan targets (composite/segment sizes below) —
+ * not for building the `-R` argument itself (that stays in points,
+ * unmodified), and not currently used to verify a real captured PNG's
+ * actual dimensions against this expectation.
  */
 export function expectedPixelDimensions(rectInPoints: RectInPoints, scaleFactor: number): PixelDimensions {
   return {
@@ -155,6 +157,18 @@ export interface CapturePlan {
   compositeSizeInPixels: PixelDimensions
   /** The scaleFactor the composite image was produced at — the HIGHEST among touched displays (see below). Exposed so callers converting a point into this capture's own pixel space (e.g. inline annotation shapes, BUILD-SPEC.md §2.4.2) don't have to re-derive it. */
   compositeScaleFactor: number
+  /**
+   * False when part of the requested rect falls outside every display — a
+   * staggered/non-aligned multi-monitor arrangement can have "dead space"
+   * inside the rect's bounding box that belongs to no real screen (see
+   * `virtualDesktopBoundsInPoints`'s doc comment). The capture still
+   * proceeds; that area is simply never captured (left transparent in the
+   * output), so callers should surface this rather than reporting plain
+   * success. Real displays never overlap, so summing each touched display's
+   * intersection area and comparing to the requested rect's own area is a
+   * safe way to detect a gap without computing an actual polygon union.
+   */
+  fullyCovered: boolean
 }
 
 /**
@@ -181,9 +195,16 @@ export function planCapture(rectInPoints: RectInPoints, displays: DisplayInfo[])
   const compositeScaleFactor = scaleFactors.length > 0 ? Math.max(...scaleFactors) : 1
   const compositeSizeInPixels = expectedPixelDimensions(rectInPoints, compositeScaleFactor)
 
+  const coveredAreaInPoints = touched.reduce((sum, t) => sum + t.intersection.width * t.intersection.height, 0)
+  const requestedAreaInPoints = rectInPoints.width * rectInPoints.height
+  // A tiny tolerance, not zero — floating-point rect math (rounding during a
+  // live drag, etc.) can leave a fractional-point discrepancy even when the
+  // selection is genuinely fully covered.
+  const fullyCovered = coveredAreaInPoints >= requestedAreaInPoints - 1
+
   const allSameScale = scaleFactors.every((factor) => factor === compositeScaleFactor)
   if (allSameScale) {
-    return { singleCapture: true, segments: [], compositeSizeInPixels, compositeScaleFactor }
+    return { singleCapture: true, segments: [], compositeSizeInPixels, compositeScaleFactor, fullyCovered }
   }
 
   const segments: CaptureSegmentPlan[] = touched.map(({ display, intersection }) => ({
@@ -196,7 +217,7 @@ export function planCapture(rectInPoints: RectInPoints, displays: DisplayInfo[])
     resizeToPixels: expectedPixelDimensions(intersection, compositeScaleFactor)
   }))
 
-  return { singleCapture: false, segments, compositeSizeInPixels, compositeScaleFactor }
+  return { singleCapture: false, segments, compositeSizeInPixels, compositeScaleFactor, fullyCovered }
 }
 
 /**

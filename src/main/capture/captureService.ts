@@ -62,6 +62,18 @@ export async function captureToTemp(rectInPoints: RectInPoints, shapes: Annotati
   const tempPath = join(tempDir, 'capture.png')
   const plan = planCapture(rectInPoints, currentDisplayInfos())
 
+  if (!plan.fullyCovered) {
+    // Not a failure — the capture still proceeds — but part of the selection
+    // fell outside every display (a staggered/non-aligned multi-monitor
+    // arrangement) and will be transparent in the result. Silently returning
+    // a partially-blank image would violate this project's "never fail
+    // silently" rule just as much as an outright error would.
+    notifyFailureBase(
+      'Part of your selection was outside any display',
+      "The captured image will have a transparent gap there. This usually means your displays aren't perfectly aligned in System Settings."
+    )
+  }
+
   try {
     if (plan.singleCapture) {
       await captureRegion({ rectInPoints, outputPath: tempPath })

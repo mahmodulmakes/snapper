@@ -37,10 +37,11 @@ function Toggle({ checked, onChange, label }: ToggleProps): JSX.Element {
 interface ShortcutRowProps {
   id: ShortcutActionId
   accelerator: string
+  conflicted: boolean
   onRebind: (id: ShortcutActionId, accelerator: string) => Promise<boolean>
 }
 
-function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Element {
+function ShortcutRow({ id, accelerator, conflicted, onRebind }: ShortcutRowProps): JSX.Element {
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -82,7 +83,17 @@ function ShortcutRow({ id, accelerator, onRebind }: ShortcutRowProps): JSX.Eleme
 
   return (
     <div className="flex items-center justify-between py-2.5">
-      <span className="text-sm text-neutral-800 dark:text-neutral-200">{SHORTCUT_LABELS[id]}</span>
+      <span className="flex items-center gap-1.5 text-sm text-neutral-800 dark:text-neutral-200">
+        {SHORTCUT_LABELS[id]}
+        {conflicted && (
+          <span
+            className="text-amber-600 dark:text-amber-400"
+            title="Already used by another app, so this shortcut won't respond. Click the keybinding below to change it."
+          >
+            ⚠
+          </span>
+        )}
+      </span>
       <div className="flex items-center gap-3">
         {error && (
           <span className="max-w-[220px] text-right text-xs text-red-600 dark:text-red-400">{error}</span>
@@ -122,7 +133,15 @@ export default function App(): JSX.Element {
   const rebind = useCallback(async (id: ShortcutActionId, accelerator: string) => {
     const ok = await window.settingsApi.setShortcut(id, accelerator)
     if (ok) {
-      setState((prev) => (prev ? { ...prev, shortcuts: { ...prev.shortcuts, [id]: accelerator } } : prev))
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              shortcuts: { ...prev.shortcuts, [id]: accelerator },
+              shortcutConflicts: { ...prev.shortcutConflicts, [id]: false }
+            }
+          : prev
+      )
     }
     return ok
   }, [])
@@ -212,9 +231,24 @@ export default function App(): JSX.Element {
       <section className="mb-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
         <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-500">Shortcuts</h2>
         <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
-          <ShortcutRow id="captureArea" accelerator={state.shortcuts.captureArea} onRebind={rebind} />
-          <ShortcutRow id="captureFullScreen" accelerator={state.shortcuts.captureFullScreen} onRebind={rebind} />
-          <ShortcutRow id="captureText" accelerator={state.shortcuts.captureText} onRebind={rebind} />
+          <ShortcutRow
+            id="captureArea"
+            accelerator={state.shortcuts.captureArea}
+            conflicted={state.shortcutConflicts.captureArea}
+            onRebind={rebind}
+          />
+          <ShortcutRow
+            id="captureFullScreen"
+            accelerator={state.shortcuts.captureFullScreen}
+            conflicted={state.shortcutConflicts.captureFullScreen}
+            onRebind={rebind}
+          />
+          <ShortcutRow
+            id="captureText"
+            accelerator={state.shortcuts.captureText}
+            conflicted={state.shortcutConflicts.captureText}
+            onRebind={rebind}
+          />
         </div>
       </section>
 

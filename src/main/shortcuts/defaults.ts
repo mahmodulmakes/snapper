@@ -1,4 +1,4 @@
-import type { ShortcutActionId, ShortcutBindings } from '../../shared/types'
+import type { ShortcutBindings } from '../../shared/types'
 
 /**
  * Ship on ⌃⇧ (Control-Shift), never ⌘⇧3/4/5 — those belong to macOS
@@ -9,10 +9,4 @@ export const DEFAULT_SHORTCUTS: ShortcutBindings = {
   captureArea: 'Control+Shift+4',
   captureFullScreen: 'Control+Shift+3',
   captureText: 'Control+Shift+2'
-}
-
-export const SHORTCUT_LABELS: Record<ShortcutActionId, string> = {
-  captureArea: 'Capture Area',
-  captureFullScreen: 'Capture Full Screen',
-  captureText: 'Capture Text'
 }

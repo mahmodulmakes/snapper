@@ -7,12 +7,19 @@ import { initSettingsIpc, teardownSettingsIpc } from './settings/settingsIpc'
 import { showSettingsWindow, closeSettingsWindow } from './settings/settingsWindow'
 import { syncLaunchAtLogin } from './settings/launchAtLogin'
 import { getSettingsStore } from './settings/store'
-import { initShortcuts, onShortcutStateChange, setShortcutsPaused, teardownShortcuts } from './shortcuts/shortcutManager'
+import {
+  initShortcuts,
+  isShortcutConflicted,
+  onShortcutStateChange,
+  setShortcutsPaused,
+  teardownShortcuts
+} from './shortcuts/shortcutManager'
 import { createTray, destroyTray, updateTrayMenu } from './tray/trayManager'
 import { initOverlayWindows, showOverlays, showOverlaysForTextCapture, teardownOverlayWindows } from './overlay/overlayManager'
 import { logger } from './logger'
 import { notifyFailure } from './notify'
 import type { TrayMenuHandlers, TrayMenuState } from './tray/menuBuilder'
+import type { ShortcutActionId } from '../shared/types'
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
@@ -78,9 +85,14 @@ const trayHandlers: TrayMenuHandlers = {
 
 function currentTrayState(): TrayMenuState {
   const store = getSettingsStore()
+  const shortcuts = store.get('shortcuts')
+  const shortcutConflicts = Object.fromEntries(
+    (Object.keys(shortcuts) as ShortcutActionId[]).map((id) => [id, isShortcutConflicted(id)])
+  ) as Record<ShortcutActionId, boolean>
   return {
-    shortcuts: store.get('shortcuts'),
-    shortcutsPaused: store.get('shortcutsPaused')
+    shortcuts,
+    shortcutsPaused: store.get('shortcutsPaused'),
+    shortcutConflicts
   }
 }
 

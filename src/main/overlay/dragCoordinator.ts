@@ -152,6 +152,14 @@ function clampResizeMinSize(rect: Rect, anchor: Point, minSize: number, lockedAx
  * deltas), and returns the resulting rect. Only valid while dragState is set
  * (tickDrag/handleDragEnd both guard).
  *
+ * In practice Space-to-pan only ever activates during a fresh drag-out: the
+ * renderer only forwards Space/Shift/Option state while its own `dragging`
+ * flag is set (renderer/overlay/main.ts's onKeyDown/onKeyUp), which is never
+ * true during a resize or move — those hardcode `modifiers.space: false` at
+ * `handleResizeStart`/`handleMoveStart` and nothing updates it afterward. Not
+ * a bug, just not the "works uniformly across all three modes" the code
+ * structure might suggest.
+ *
  * Resize (`axisLock` set) reuses this same tick instead of its own: pinning
  * one of the cursor's two axes to a fixed value before handing it to
  * `computeDragRect` makes that axis hold at its original size while the

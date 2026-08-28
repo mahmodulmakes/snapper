@@ -4,17 +4,22 @@ import { notifyFailure } from '../notify'
 import { setLaunchAtLogin } from './launchAtLogin'
 import { getSettingsStore } from './store'
 import { getSettingsWindowHandle } from './settingsWindow'
-import { setShortcutsPaused, trySetShortcut } from '../shortcuts/shortcutManager'
+import { isShortcutConflicted, setShortcutsPaused, trySetShortcut } from '../shortcuts/shortcutManager'
 import type { SettingsState, ShortcutActionId } from '../../shared/types'
 
 let registered = false
 
 function getState(): SettingsState {
   const store = getSettingsStore()
+  const shortcuts = store.get('shortcuts')
+  const shortcutConflicts = Object.fromEntries(
+    (Object.keys(shortcuts) as ShortcutActionId[]).map((id) => [id, isShortcutConflicted(id)])
+  ) as Record<ShortcutActionId, boolean>
   return {
     launchAtLogin: store.get('launchAtLogin'),
-    shortcuts: store.get('shortcuts'),
+    shortcuts,
     shortcutsPaused: store.get('shortcutsPaused'),
+    shortcutConflicts,
     saveToDisk: store.get('saveToDisk'),
     saveDirectory: store.get('saveDirectory')
   }

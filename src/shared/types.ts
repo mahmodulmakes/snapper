@@ -84,6 +84,8 @@ export interface SettingsState {
   launchAtLogin: boolean
   shortcuts: ShortcutBindings
   shortcutsPaused: boolean
+  /** True for an id whose stored shortcut isn't actually live because another app already owns that key combination. */
+  shortcutConflicts: Record<ShortcutActionId, boolean>
   saveToDisk: boolean
   saveDirectory: string
 }

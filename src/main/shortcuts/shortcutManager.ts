@@ -96,6 +96,19 @@ export function getRegisteredAccelerators(): Partial<Record<ShortcutActionId, st
 }
 
 /**
+ * True when `id`'s stored shortcut is NOT actually live right now because
+ * another app already owns that key combination. Not true while shortcuts
+ * are globally paused — that's an intentional, expected state, not a
+ * conflict — and not true for an id that simply hasn't been registered yet
+ * (before `initShortcuts` runs).
+ */
+export function isShortcutConflicted(id: ShortcutActionId): boolean {
+  if (!handlers) return false
+  if (getSettingsStore().get('shortcutsPaused')) return false
+  return registeredAccelerators[id] === undefined
+}
+
+/**
  * Attempts to rebind one action (the Settings recorder widget). Returns
  * false on conflict and leaves the previous binding registered and
  * persisted — never silently drop a working shortcut for a broken one

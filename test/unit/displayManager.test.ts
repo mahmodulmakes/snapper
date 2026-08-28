@@ -131,6 +131,7 @@ describe('planCapture', () => {
     expect(plan.singleCapture).toBe(true)
     expect(plan.segments).toEqual([])
     expect(plan.compositeSizeInPixels).toEqual({ width: 400, height: 300 })
+    expect(plan.fullyCovered).toBe(true)
   })
 
   it('two displays sharing one scaleFactor: single capture even though the rect spans both', () => {
@@ -145,6 +146,18 @@ describe('planCapture', () => {
     const plan = planCapture({ x: 5000, y: 5000, width: 100, height: 100 }, [RETINA_DISPLAY, EXTERNAL_DISPLAY])
     expect(plan.singleCapture).toBe(true)
     expect(plan.compositeSizeInPixels).toEqual({ width: 100, height: 100 })
+    expect(plan.fullyCovered).toBe(false)
+  })
+
+  it('a rect crossing the gap in a staggered arrangement (neither display covers the full width at every row) is flagged as not fully covered', () => {
+    // RETINA is only 1470pt wide; EXTERNAL (1920pt wide) sits directly above
+    // it. A rect straddling x=1470..1800 and y=-50..100 has real coverage
+    // from EXTERNAL for its top half (y<0) but nothing at all for its bottom
+    // half (y>=0, x>1470 belongs to neither display) — the exact "dead
+    // space inside the bounding box" scenario this field exists to catch.
+    const rect = { x: 1500, y: -50, width: 300, height: 150 }
+    const plan = planCapture(rect, [RETINA_DISPLAY, EXTERNAL_DISPLAY])
+    expect(plan.fullyCovered).toBe(false)
   })
 
   it('spike 4: a rect spanning displays of different scaleFactor splits into per-display segments at the highest scaleFactor touched', () => {

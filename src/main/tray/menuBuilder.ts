@@ -1,5 +1,5 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron'
-import type { ShortcutBindings } from '../../shared/types'
+import type { ShortcutActionId, ShortcutBindings } from '../../shared/types'
 
 export interface TrayMenuHandlers {
   onCaptureArea: () => void
@@ -13,17 +13,29 @@ export interface TrayMenuHandlers {
 export interface TrayMenuState {
   shortcuts: ShortcutBindings
   shortcutsPaused: boolean
+  shortcutConflicts: Record<ShortcutActionId, boolean>
+}
+
+/**
+ * A conflicted shortcut isn't actually live (another app owns that key
+ * combination) — showing its accelerator in the native menu's keybinding
+ * slot would be a flat-out lie, and the label itself needs to say so since
+ * that's the only place a conflict can be surfaced in a native tray menu (no
+ * icons/tooltips/color here, unlike the Settings window's version of this
+ * same state).
+ */
+function captureMenuItem(label: string, id: ShortcutActionId, state: TrayMenuState, click: () => void): MenuItemConstructorOptions {
+  if (state.shortcutConflicts[id]) {
+    return { label: `${label} (shortcut unavailable)`, click }
+  }
+  return { label, accelerator: state.shortcuts[id], click }
 }
 
 export function buildTrayMenu(handlers: TrayMenuHandlers, state: TrayMenuState): Menu {
   const template: MenuItemConstructorOptions[] = [
-    { label: 'Capture Area', accelerator: state.shortcuts.captureArea, click: handlers.onCaptureArea },
-    {
-      label: 'Capture Full Screen',
-      accelerator: state.shortcuts.captureFullScreen,
-      click: handlers.onCaptureFullScreen
-    },
-    { label: 'Capture Text', accelerator: state.shortcuts.captureText, click: handlers.onCaptureText },
+    captureMenuItem('Capture Area', 'captureArea', state, handlers.onCaptureArea),
+    captureMenuItem('Capture Full Screen', 'captureFullScreen', state, handlers.onCaptureFullScreen),
+    captureMenuItem('Capture Text', 'captureText', state, handlers.onCaptureText),
     { type: 'separator' },
     { label: 'Open Save Folder', click: handlers.onOpenSaveFolder },
     { type: 'separator' },
