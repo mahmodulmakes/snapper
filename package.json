@@ -1,6 +1,6 @@
 {
   "name": "snapper",
-  "version": "0.0.1",
+  "version": "2.0.0",
   "private": true,
   "description": "Snapper — a fast, local-only screenshot tool for macOS.",
   "author": "",
