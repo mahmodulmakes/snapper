@@ -90,14 +90,6 @@ function buildColorPopover(): void {
     button.addEventListener('click', () => selectColor(color))
     colorPopover.appendChild(button)
   }
-
-  const customInput = document.createElement('input')
-  customInput.type = 'color'
-  customInput.id = 'annotation-color-custom'
-  customInput.value = DEFAULT_COLOR
-  customInput.setAttribute('aria-label', 'Custom color')
-  customInput.addEventListener('input', () => selectColor(customInput.value))
-  colorPopover.appendChild(customInput)
 }
 
 /** Wires every click handler once, at module load — call before `show()`. */
