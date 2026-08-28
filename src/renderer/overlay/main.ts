@@ -505,6 +505,9 @@ function triggerCancel(): void {
   drawingShape = null
   resizingHandle = null
   moving = false
+  dragging = false
+  shapeDrawing = false
+  textDragging = false
   window.overlayApi.dismiss()
 }
 
@@ -586,7 +589,16 @@ function onKeyDown(event: KeyboardEvent): void {
     return
   }
 
-  if (event.key === 'Enter' && selection && !dragging) {
+  // Guards against every gesture that keeps `selection` non-null while it's
+  // still in flight — without checking resizingHandle/moving/shapeDrawing
+  // too, pressing Enter mid-resize (mouse still down) would export the
+  // STALE pre-resize rect (main's finalizedRectInPoints is null during an
+  // active gesture, but the renderer's own `selection` isn't updated until
+  // the 'finalized' broadcast after mouseup) and abort the gesture underneath
+  // the user with no warning.
+  const gestureInFlight = dragging || resizingHandle !== null || moving || shapeDrawing
+
+  if (event.key === 'Enter' && selection && !gestureInFlight) {
     // Default action on Enter is a setting (most users: Copy) — hardcoded
     // until the Settings window (Phase 5) can configure it.
     event.preventDefault()
@@ -610,7 +622,7 @@ function onKeyDown(event: KeyboardEvent): void {
     window.overlayApi.sendDragModifiers(currentModifiers())
   }
 
-  if (selection && !dragging) {
+  if (selection && !gestureInFlight) {
     const step = event.shiftKey ? 10 : 1
     let dx = 0
     let dy = 0

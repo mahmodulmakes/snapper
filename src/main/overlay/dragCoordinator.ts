@@ -121,14 +121,23 @@ function broadcastSelectionState(
  * size and re-deriving position from whichever side is actually anchored —
  * `x === anchor.x` is an exact comparison, not approximate: `computeDragRect`
  * assigns one of those two values verbatim, never a derived one.
+ *
+ * `lockedAxis` (an edge handle's pinned cursor axis — see `anchorForHandle`)
+ * must be excluded from this clamp, not just left alone by `computeDragRect`:
+ * that axis's dimension is a fixed, already-correct value carried over from
+ * the ORIGINAL selection, which can itself be smaller than `minSize` (e.g. a
+ * selection drawn only 3pt wide). Without this exclusion, grabbing the `n`/
+ * `s`/`e`/`w` handle on such a selection would silently stretch the axis the
+ * user never touched up to `minSize`, the moment they started dragging the
+ * other one.
  */
-function clampResizeMinSize(rect: Rect, anchor: Point, minSize: number): Rect {
+function clampResizeMinSize(rect: Rect, anchor: Point, minSize: number, lockedAxis?: 'x' | 'y'): Rect {
   let { x, y, width, height } = rect
-  if (width < minSize) {
+  if (lockedAxis !== 'x' && width < minSize) {
     x = x === anchor.x ? anchor.x : anchor.x - minSize
     width = minSize
   }
-  if (height < minSize) {
+  if (lockedAxis !== 'y' && height < minSize) {
     y = y === anchor.y ? anchor.y : anchor.y - minSize
     height = minSize
   }
@@ -170,7 +179,9 @@ function advanceDragTick(displays: DisplayInfo[]): Rect {
 
   const effectiveCursor = state.axisLock ? { ...cursor, [state.axisLock.axis]: state.axisLock.pinnedValueInPoints } : cursor
   let rect = computeDragRect(state.anchorInPoints, effectiveCursor, state.modifiers)
-  if (state.minSizeInPoints !== undefined) rect = clampResizeMinSize(rect, state.anchorInPoints, state.minSizeInPoints)
+  if (state.minSizeInPoints !== undefined) {
+    rect = clampResizeMinSize(rect, state.anchorInPoints, state.minSizeInPoints, state.axisLock?.axis)
+  }
   return clampRectToVirtualDesktop(rect, displays)
 }
 

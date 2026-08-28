@@ -1,6 +1,7 @@
 import { globalShortcut, powerMonitor } from 'electron'
 import { getSettingsStore } from '../settings/store'
 import { logger } from '../logger'
+import { notifyFailure } from '../notify'
 import type { ShortcutActionId } from '../../shared/types'
 
 type ActionHandlers = Record<ShortcutActionId, () => void>
@@ -9,6 +10,10 @@ let handlers: ActionHandlers | null = null
 let registeredAccelerators: Partial<Record<ShortcutActionId, string>> = {}
 let onStateChangeCallback: (() => void) | null = null
 let listenersRegistered = false
+// registerAll() re-runs at startup, after every pause/resume toggle, and
+// after every wake-from-sleep — without this, an unresolved conflict would
+// re-notify the user every single time instead of once.
+const notifiedConflicts = new Set<string>()
 
 /** Settings/tray UI calls this to be told when bindings, conflicts, or pause state change. */
 export function onShortcutStateChange(callback: () => void): void {
@@ -25,8 +30,18 @@ function registerOne(id: ShortcutActionId, accelerator: string): boolean {
     const ok = globalShortcut.register(accelerator, handlers[id])
     if (ok) {
       registeredAccelerators[id] = accelerator
+      notifiedConflicts.delete(`${id}:${accelerator}`)
     } else {
-      logger.error(`Shortcut conflict: "${accelerator}" for ${id} is already owned by another app.`)
+      const key = `${id}:${accelerator}`
+      if (notifiedConflicts.has(key)) {
+        logger.error(`Shortcut conflict: "${accelerator}" for ${id} is already owned by another app.`)
+      } else {
+        notifiedConflicts.add(key)
+        notifyFailure(
+          'Shortcut unavailable',
+          `"${accelerator}" is already used by another app, so ${id} won't respond to it. Change it in Settings.`
+        )
+      }
     }
     return ok
   } catch (err) {

@@ -22,14 +22,35 @@ let store: Store<SettingsSchema> | null = null
  * missing — until the user manually touched that setting. Beta-scale
  * concern only; revisit with a real migration story before Phase 7 ships to
  * real users.
+ *
+ * Also the last line of defense against a corrupted/hand-edited
+ * settings.json: `current` is whatever raw JSON value was on disk under
+ * this key, completely untyped despite the `Store<SettingsSchema>` generic
+ * (electron-store doesn't validate against it at read time) — a `null`,
+ * string, or array there would throw on the `in` operator below and take
+ * down the entire startup sequence before the tray even exists. Rebuilding
+ * from defaults on anything that isn't a plain object is deliberate: a
+ * silently-reset shortcut is recoverable in Settings; a silently-dead app
+ * is not.
  */
 function backfillMissingShortcuts(s: Store<SettingsSchema>): void {
-  const current = s.get('shortcuts') as Record<ShortcutActionId, string>
-  const missing = (Object.keys(DEFAULT_SHORTCUTS) as ShortcutActionId[]).filter((id) => !(id in current))
-  if (missing.length === 0) return
-  const patched = { ...current }
-  for (const id of missing) patched[id] = DEFAULT_SHORTCUTS[id]
-  s.set('shortcuts', patched)
+  const raw = s.get('shortcuts')
+  const isPlainObject = typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+  if (!isPlainObject) {
+    s.set('shortcuts', DEFAULT_SHORTCUTS)
+    return
+  }
+
+  const current = raw as Record<ShortcutActionId, unknown>
+  const patched = { ...current } as Record<ShortcutActionId, string>
+  let changed = false
+  for (const id of Object.keys(DEFAULT_SHORTCUTS) as ShortcutActionId[]) {
+    if (typeof current[id] !== 'string' || current[id] === '') {
+      patched[id] = DEFAULT_SHORTCUTS[id]
+      changed = true
+    }
+  }
+  if (changed) s.set('shortcuts', patched)
 }
 
 /**

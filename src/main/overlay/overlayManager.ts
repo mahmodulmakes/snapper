@@ -119,6 +119,13 @@ async function rebuildOverlayWindows(): Promise<void> {
   // rather than letting the poll timer keep ticking against now-destroyed
   // BrowserWindows.
   resetDragState()
+  // Without this, a display change (even one unrelated to a deliberate
+  // reconfiguration — display-metrics-changed can fire for other reasons)
+  // while a capture is mid-flight destroys the visible overlay and replaces
+  // it with new HIDDEN windows, but leaves overlaysActive true. showOverlays()
+  // then silently no-ops on every future hotkey press — the capture feature
+  // stays dead until the app is restarted, with no error anywhere.
+  overlaysActive = false
   destroyOverlayWindows()
   const displays = screen.getAllDisplays()
   const windows = await Promise.all(displays.map((display) => createOverlayWindow(display)))

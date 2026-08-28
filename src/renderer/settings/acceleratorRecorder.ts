@@ -62,6 +62,12 @@ const DISPLAY_SYMBOLS: Record<string, string> = {
 
 /** "Control+Shift+4" -> "⌃⇧4", for display only — never sent back over IPC. */
 export function formatAcceleratorForDisplay(accelerator: string): string {
+  // Belt-and-suspenders: store.ts validates every shortcut is a real string
+  // before it ever reaches the renderer, but this is the one place a bad
+  // value would otherwise crash the whole Settings window (React unmounts
+  // the entire tree on an uncaught render error, with no boundary here) —
+  // showing "?" instead is a display glitch, not a blank window.
+  if (typeof accelerator !== 'string' || accelerator === '') return '?'
   return accelerator
     .split('+')
     .map((part) => DISPLAY_SYMBOLS[part] ?? part)

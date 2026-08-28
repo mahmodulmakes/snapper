@@ -140,6 +140,16 @@ if (!gotSingleInstanceLock) {
       showSettingsWindow()
     }
     logger.info('App ready; tray created, overlay window pool pre-warmed.')
+  }).catch((err: unknown) => {
+    // Without this, any exception during startup (e.g. a corrupted
+    // settings.json surviving validation some other way) becomes an
+    // unhandled rejection: the tray, overlays, and shortcuts never get
+    // created, and the app sits as an invisible, unkillable-except-via-
+    // Activity-Monitor process — the single-instance lock is already held,
+    // so even relaunching does nothing. A native notification at least
+    // tells the user something is wrong instead of the app vanishing.
+    logger.error('Startup failed unexpectedly.', err)
+    notifyFailure('Snapper failed to start', `Please relaunch. If this keeps happening: ${String(err)}`)
   })
 
   app.on('window-all-closed', () => {
