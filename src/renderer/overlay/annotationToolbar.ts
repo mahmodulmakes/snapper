@@ -5,7 +5,7 @@ import type { AnnotationTool, RectInPoints } from '../../shared/types'
 // itself, same as the horizontal Copy/Save toolbar, no separate window.
 
 const TOOLS: AnnotationTool[] = ['arrow', 'rectangle', 'oval', 'line']
-const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff', '#000000']
+const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#06b6d4', '#ffffff', '#000000']
 const DEFAULT_COLOR = COLORS[0] as string
 const TOOLBAR_GAP_PX = 8
 
@@ -49,13 +49,17 @@ function selectTool(tool: AnnotationTool): void {
 /**
  * `#annotation-color-popover` is `position: fixed` with no left/top ever
  * set — without this, it renders at its default (0,0), the page's top-left
- * corner, nowhere near the toggle button that opened it. Measures
+ * corner, nowhere near the toolbar that opened it. Measures
  * `offsetWidth`/`offsetHeight` AFTER the caller has already added `.visible`
  * (display:flex), since both read as 0 while still display:none.
+ *
+ * Bottom-aligned with the annotation toolbar's own bottom edge — not
+ * centered on the toggle button — so the two floating bars read as one
+ * matched pair sitting side by side, consistent with this app's other
+ * bottom-alignment convention for floating toolbars.
  */
 function positionColorPopover(): void {
-  if (!colorPopover || !colorToggle || !container) return
-  const toggleRect = colorToggle.getBoundingClientRect()
+  if (!colorPopover || !container) return
   const containerRect = container.getBoundingClientRect()
   const gap = 8
 
@@ -65,7 +69,7 @@ function positionColorPopover(): void {
   }
   left = Math.min(Math.max(left, 0), Math.max(0, window.innerWidth - colorPopover.offsetWidth))
 
-  let top = toggleRect.top + toggleRect.height / 2 - colorPopover.offsetHeight / 2
+  let top = containerRect.bottom - colorPopover.offsetHeight
   top = Math.min(Math.max(top, 0), Math.max(0, window.innerHeight - colorPopover.offsetHeight))
 
   colorPopover.style.left = `${left}px`
